@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Nueva agrupacion{% endblock %}
+
+{% block extra_css %}
+.panel { max-width: 760px; margin: 0 auto; }
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.checkbox-field { display: flex; align-items: center; gap: 8px; }
+.checkbox-field input { width: auto; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+{% endblock %}
+
+{% block content %}
+    <div class="panel">
+        <h1>Nueva agrupación</h1>
+        <p>Crea una agrupación para poder asignarla al artista.</p>
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+
+            {% if form.non_field_errors %}
+                <div class="errors">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="field">
+                {{ form.nombre.label_tag }}
+                {{ form.nombre }}
+                {{ form.nombre.errors }}
+            </div>
+
+            <div class="field">
+                {{ form.descripcion.label_tag }}
+                {{ form.descripcion }}
+                {{ form.descripcion.errors }}
+            </div>
+
+            <div class="field checkbox-field">
+                {{ form.activo }}
+                {{ form.activo.label_tag }}
+            </div>
+
+            <div class="actions">
+                <button class="button" type="submit">Guardar agrupación</button>
+                {% if next %}
+                    <a class="button secondary" href="{{ next }}">Cancelar</a>
+                {% else %}
+                    <a class="button secondary" href="{% url 'artists:list' %}">Cancelar</a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+{% endblock %}

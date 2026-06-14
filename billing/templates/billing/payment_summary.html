@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Resumen de pagos{% endblock %}
+
+{% block extra_css %}
+table { width: 100%; border-collapse: collapse; margin-top: 16px; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+th, td { border-bottom: 1px solid #e5e7eb; padding: 10px 8px; text-align: left; }
+th { background: #f9fafb; }
+{% endblock %}
+
+{% block content %}
+    <h1>Pagos registrados</h1>
+    <p>Total cobrado: {{ total_paid }}</p>
+    <p class="meta">Listado de registros marcados como pagados en la aplicación de control.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Artista</th>
+                <th>Agrupación</th>
+                <th>Cuenta</th>
+                <th>Importe entregado</th>
+                <th>Fecha alta</th>
+                <th>Última actualización</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for record in paid_records %}
+            <tr>
+                <td>{{ record.artista.nombre_completo }}</td>
+                <td>{{ record.agrupacion.nombre|default:"-" }}</td>
+                <td>{{ record.artista.cuenta_bancaria|default:"-" }}</td>
+                <td>{{ record.importe_entregado|default:record.neto_para_pago }}</td>
+                <td>{{ record.fecha_alta }}</td>
+                <td>{{ record.actualizado_en }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6">No hay registros pagados.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Artista{% endblock %}
+
+{% block extra_css %}
+.form-grid { display: grid; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+fieldset { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 0 0 18px; }
+legend { font-weight: 700; padding: 0 8px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+.checkbox-field { display: flex; align-items: center; gap: 8px; }
+.checkbox-field input { width: auto; }
+.info-tramo { margin-top: 8px; font-size: 13px; color: #1f2937; }
+.info-tramo.error { color: #b91c1c; }
+.field-help { margin-top: 6px; font-size: 13px; }
+{% endblock %}
+
+{% block content %}
+        <div class="panel">
+            <h1>{% if object %}Editar artista{% else %}Alta de artista{% endif %}</h1>
+            <p>Completa únicamente la ficha maestra del artista. Los registros operativos se gestionan aparte.</p>
+
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="errors">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <fieldset>
+                    <legend>Identificación</legend>
+                    <div class="grid-2 form-grid">
+                        <div class="field">
+                            {{ form.nombre_completo.label_tag }}
+                            {{ form.nombre_completo }}
+                            {{ form.nombre_completo.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.dni_nie.label_tag }}
+                            {{ form.dni_nie }}
+                            {{ form.dni_nie.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.cuenta_bancaria.label_tag }}
+                            {{ form.cuenta_bancaria }}
+                            {{ form.cuenta_bancaria.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.numero_seguridad_social.label_tag }}
+                            {{ form.numero_seguridad_social }}
+                            {{ form.numero_seguridad_social.errors }}
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="actions">
+                    <button class="button" type="submit">Guardar artista</button>
+                    {% if not object %}
+                        <a class="button secondary" href="{% url 'artists:bulk-upload' %}">Carga masiva CSV</a>
+                    {% endif %}
+                    <a class="button secondary" href="{% url 'artists:list' %}">Volver al listado</a>
+                </div>
+            </form>
+        </div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Borrar artista{% endblock %}
+
+{% block extra_css %}
+.panel { max-width: 700px; margin: 0 auto; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+{% endblock %}
+
+{% block content %}
+    <div class="panel">
+        <h1>Borrar artista</h1>
+        <p>Vas a borrar a <strong>{{ object.nombre_completo }}</strong>. Esta acción no se puede deshacer.</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="actions">
+                <button class="button danger" type="submit">Sí, borrar</button>
+                <a class="button" href="{% url 'artists:list' %}">Cancelar</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}

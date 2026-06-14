@@ -1,0 +1,157 @@
+{% load static %}
+<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Gestion de Artistas{% endblock %}</title>
+    <style>
+        :root {
+            --color-bg: #f8fafc;
+            --color-panel: #ffffff;
+            --color-text: #1f2937;
+            --color-muted: #6b7280;
+            --color-primary: #111827;
+            --color-secondary: #e5e7eb;
+            --color-danger: #b91c1c;
+            --color-border: #d1d5db;
+            --shadow: 0 1px 2px rgba(0, 0, 0, .05);
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            color: var(--color-text);
+            background: var(--color-bg);
+        }
+
+        .container {
+            width: calc(100% - 24px);
+            max-width: none;
+            margin: 0 auto;
+            padding: 12px;
+        }
+
+        .app-header {
+            background: var(--color-panel);
+            border-bottom: 1px solid #e5e7eb;
+            box-shadow: var(--shadow);
+        }
+
+        .app-header-inner {
+            width: calc(100% - 24px);
+            max-width: none;
+            margin: 0 auto;
+            padding: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--color-text);
+            font-weight: 700;
+            font-size: 18px;
+        }
+
+        .brand-logo {
+            height: 44px;
+            width: auto;
+            border-radius: 8px;
+            display: block;
+            object-fit: cover;
+        }
+
+        .top-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            display: inline-block;
+            padding: 9px 13px;
+            border-radius: 8px;
+            background: var(--color-primary);
+            color: #fff;
+            text-decoration: none;
+            border: 0;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .button.secondary {
+            background: var(--color-secondary);
+            color: var(--color-text);
+        }
+
+        .button.danger {
+            background: var(--color-danger);
+        }
+
+        .panel {
+            background: var(--color-panel);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+
+        .meta {
+            color: var(--color-muted);
+        }
+
+        .errors, .errorlist {
+            color: var(--color-danger);
+        }
+
+        .errorlist {
+            margin: 6px 0 0;
+            padding-left: 18px;
+        }
+
+        {% block extra_css %}{% endblock %}
+    </style>
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-header-inner">
+            <a href="{% url 'artists:list' %}" class="brand">
+                <img class="brand-logo" src="{% static 'img/logo.jpeg' %}" alt="Logo">
+                <span>Gestion de Artistas</span>
+            </a>
+            {% if user.is_authenticated %}
+            <nav class="top-nav">
+                <a class="button secondary" href="{% url 'artists:list' %}">Artistas</a>
+                <a class="button secondary" href="{% url 'artists:record-list' %}">Registros</a>
+                <a class="button secondary" href="{% url 'billing:payment-summary' %}">Pagos</a>
+                <a class="button secondary" href="{% url 'artists:create' %}">Nuevo artista</a>
+                <form method="post" action="{% url 'logout' %}" style="margin:0;">
+                    {% csrf_token %}
+                    <button type="submit" class="button">Cerrar sesion</button>
+                </form>
+            </nav>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

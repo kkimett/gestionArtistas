@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Carga masiva de artistas{% endblock %}
+
+{% block extra_css %}
+.form-grid { display: grid; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.actions { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.help-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-top: 12px; }
+.summary { margin-top: 16px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; }
+.error-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+.error-table th, .error-table td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; vertical-align: top; }
+.error-table th { background: #f3f4f6; }
+.sample { font-family: monospace; white-space: pre; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 10px; overflow-x: auto; }
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h1>Carga masiva de artistas (CSV)</h1>
+    <p>Sube un archivo CSV para crear artistas en bloque. Las filas con errores no se importan y se listan al final.</p>
+
+    <form method="post" enctype="multipart/form-data" class="form-grid">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="field">
+            {{ form.csv_file.label_tag }}
+            {{ form.csv_file }}
+            {{ form.csv_file.errors }}
+        </div>
+
+        <div class="actions">
+            <button class="button" type="submit">Importar CSV</button>
+            <a class="button secondary" href="{% url 'artists:create' %}">Volver al alta manual</a>
+            <a class="button secondary" href="{% url 'artists:list' %}">Volver al listado</a>
+        </div>
+    </form>
+
+    <div class="help-box">
+        <strong>Columnas obligatorias:</strong> {{ required_columns|join:", " }}
+        <p style="margin-bottom: 8px;">Ejemplo de cabecera y fila:</p>
+        <div class="sample">nombre_completo,dni_nie,cuenta_bancaria,numero_seguridad_social
+Ana Perez,12345678Z,ES9121000418450200051332,28/1234567890</div>
+    </div>
+
+    {% if processed_count %}
+        <div class="summary">
+            <p><strong>Filas procesadas:</strong> {{ processed_count }}</p>
+            <p><strong>Artistas creados:</strong> {{ created_count }}</p>
+            <p><strong>Filas con error:</strong> {{ error_rows|length }}</p>
+
+            {% if error_rows %}
+                <table class="error-table">
+                    <thead>
+                        <tr>
+                            <th>Línea</th>
+                            <th>Errores</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in error_rows %}
+                            <tr>
+                                <td>{{ row.line }}</td>
+                                <td>
+                                    {% for field, errors in row.errors.items %}
+                                        <div><strong>{{ field }}:</strong> {{ errors|join:", " }}</div>
+                                    {% endfor %}
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

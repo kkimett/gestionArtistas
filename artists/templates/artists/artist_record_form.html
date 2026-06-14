@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}Registro de artista{% endblock %}
+
+{% block extra_css %}
+.form-grid { display: grid; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+fieldset { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; margin: 0 0 18px; }
+legend { font-weight: 700; padding: 0 8px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.stack { display: grid; gap: 14px; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+.checkbox-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.checkbox-card { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid #dbe3ea; border-radius: 12px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
+.checkbox-card input { width: auto; margin-top: 2px; }
+.checkbox-copy { display: grid; gap: 3px; }
+.checkbox-copy label { font-weight: 700; }
+.checkbox-copy .meta { font-size: 13px; }
+.field-highlight { padding: 14px; border: 1px solid #dbe3ea; border-radius: 12px; background: #fbfdff; }
+.info-tramo { margin-top: 8px; font-size: 13px; color: #1f2937; }
+.info-tramo.error { color: #b91c1c; }
+.field-help { margin-top: 6px; font-size: 13px; }
+@media (max-width: 900px) {
+    .grid-3 { grid-template-columns: 1fr; }
+    .checkbox-group { grid-template-columns: 1fr; }
+}
+{% endblock %}
+
+{% block content %}
+        <div class="panel">
+            <h1>{% if object %}Editar registro{% else %}Nuevo registro{% endif %}</h1>
+            <p>Asocia el registro a un artista y completa sus datos operativos.</p>
+
+            <form method="post">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="errors">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <fieldset>
+                    <legend>Artista y agrupación</legend>
+                    <div class="grid-2 form-grid">
+                        <div class="field">
+                            {{ form.artista.label_tag }}
+                            {{ form.artista }}
+                            {{ form.artista.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.agrupacion.label_tag }}
+                            {{ form.agrupacion }}
+                            {{ form.agrupacion.errors }}
+                            <div class="field-help">
+                                <a class="button secondary" href="{% url 'artists:grouping-create' %}?next={{ ruta_actual|urlencode }}">Crear nueva agrupación</a>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Situación fiscal y registro</legend>
+                    <div class="stack">
+                        <div class="grid-3 form-grid">
+                            <div class="field field-highlight">
+                                {{ form.tipo_registro.label_tag }}
+                                {{ form.tipo_registro }}
+                                {{ form.tipo_registro.errors }}
+                            </div>
+                            <div class="field field-highlight">
+                                {{ form.tipo_irpf.label_tag }}
+                                {{ form.tipo_irpf }}
+                                {{ form.tipo_irpf.errors }}
+                            </div>
+                            <div class="field field-highlight">
+                                <label for="id_es_autonomo">Régimen fiscal</label>
+                                <div class="checkbox-card">
+                                    {{ form.es_autonomo }}
+                                    <div class="checkbox-copy">
+                                        {{ form.es_autonomo.label_tag }}
+                                        <span class="meta">Marca esta opción si el artista trabaja como autónomo en este registro.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <div class="checkbox-card">
+                                {{ form.solicitud_a1 }}
+                                <div class="checkbox-copy">
+                                    {{ form.solicitud_a1.label_tag }}
+                                    <span class="meta">Indica si este registro requiere o incluye solicitud A1.</span>
+                                </div>
+                            </div>
+                            <div class="checkbox-card">
+                                {{ form.proceso_cancelado }}
+                                <div class="checkbox-copy">
+                                    {{ form.proceso_cancelado.label_tag }}
+                                    <span class="meta">Úsalo cuando el trámite se haya interrumpido o anulado.</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Fechas y estado</legend>
+                    <div class="grid-3 form-grid">
+                        <div class="field">
+                            {{ form.fecha_alta.label_tag }}
+                            {{ form.fecha_alta }}
+                            {{ form.fecha_alta.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.fecha_baja.label_tag }}
+                            {{ form.fecha_baja }}
+                            {{ form.fecha_baja.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.estado_pago.label_tag }}
+                            {{ form.estado_pago }}
+                            {{ form.estado_pago.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.importe_entregado.label_tag }}
+                            {{ form.importe_entregado }}
+                            {{ form.importe_entregado.errors }}
+                        </div>
+                        <div class="field">
+                            <label>Importe pendiente</label>
+                            <input id="importe_pendiente_visual" type="text" readonly value="0.00">
+                            <div class="meta">Se calcula con lo entregado y el neto a pagar.</div>
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Costes y caché</legend>
+                    <div class="grid-2 form-grid">
+                        <div class="field">
+                            {{ form.cache_neto.label_tag }}
+                            {{ form.cache_neto }}
+                            {{ form.cache_neto.errors }}
+                            <div id="info-tramo" class="info-tramo"></div>
+                        </div>
+                        <div class="field">
+                            {{ form.coste_empresa.label_tag }}
+                            {{ form.coste_empresa }}
+                            {{ form.coste_empresa.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.coste_gestion.label_tag }}
+                            {{ form.coste_gestion }}
+                            {{ form.coste_gestion.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.coste_seguridad_social.label_tag }}
+                            {{ form.coste_seguridad_social }}
+                            {{ form.coste_seguridad_social.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.coste_irpf.label_tag }}
+                            {{ form.coste_irpf }}
+                            {{ form.coste_irpf.errors }}
+                        </div>
+                    </div>
+                </fieldset>
+
+                <fieldset>
+                    <legend>Observaciones</legend>
+                    <div class="form-grid">
+                        <div class="field">
+                            {{ form.observaciones.label_tag }}
+                            {{ form.observaciones }}
+                            {{ form.observaciones.errors }}
+                        </div>
+                    </div>
+                </fieldset>
+
+                <div class="actions">
+                    <button class="button" type="submit">Guardar registro</button>
+                    <a class="button secondary" href="{% url 'artists:record-list' %}">Volver a registros</a>
+                </div>
+            </form>
+        </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const cacheNetoInput = document.getElementById("id_cache_neto");
+        const costeEmpresaInput = document.getElementById("id_coste_empresa");
+        const costeGestionInput = document.getElementById("id_coste_gestion");
+        const costeSeguridadSocialInput = document.getElementById("id_coste_seguridad_social");
+        const costeIrpfInput = document.getElementById("id_coste_irpf");
+        const importeEntregadoInput = document.getElementById("id_importe_entregado");
+        const importePendienteInput = document.getElementById("importe_pendiente_visual");
+        const infoTramo = document.getElementById("info-tramo");
+
+        if (!cacheNetoInput) {
+            return;
+        }
+
+        function setInfo(message, isError) {
+            if (!infoTramo) {
+                return;
+            }
+            infoTramo.textContent = message || "";
+            infoTramo.classList.toggle("error", Boolean(isError));
+        }
+
+        function limpiarCostes() {
+            if (costeEmpresaInput) costeEmpresaInput.value = "";
+            if (costeGestionInput) costeGestionInput.value = "";
+            if (costeSeguridadSocialInput) costeSeguridadSocialInput.value = "";
+            if (costeIrpfInput) costeIrpfInput.value = "";
+        }
+
+        function toNumber(value) {
+            const parsed = parseFloat((value || "0").toString().replace(",", "."));
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function actualizarPendiente() {
+            if (!importePendienteInput) {
+                return;
+            }
+            const cacheNeto = toNumber(cacheNetoInput?.value);
+            const costeEmpresa = toNumber(costeEmpresaInput?.value);
+            const costeGestion = toNumber(costeGestionInput?.value);
+            const costeSeguridadSocial = toNumber(costeSeguridadSocialInput?.value);
+            const costeIrpf = toNumber(costeIrpfInput?.value);
+            const importeEntregado = toNumber(importeEntregadoInput?.value);
+            const netoPago = cacheNeto - (costeEmpresa + costeGestion + costeSeguridadSocial + costeIrpf);
+            const pendiente = Math.max(0, netoPago - importeEntregado);
+            importePendienteInput.value = pendiente.toFixed(2);
+        }
+
+        async function calcularCostes() {
+            const valor = (cacheNetoInput.value || "").trim().replace(",", ".");
+            if (!valor) {
+                limpiarCostes();
+                setInfo("");
+                return;
+            }
+
+            try {
+                const url = `{% url 'artists:calcular-costes' %}?cache_neto=${encodeURIComponent(valor)}`;
+                const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    limpiarCostes();
+                    setInfo(data.error || "No se pudo calcular el coste para este caché neto.", true);
+                    return;
+                }
+
+                if (costeEmpresaInput) costeEmpresaInput.value = data.costes.coste_empresa;
+                if (costeGestionInput) costeGestionInput.value = data.costes.coste_gestion;
+                if (costeSeguridadSocialInput) costeSeguridadSocialInput.value = data.costes.coste_seguridad_social;
+                if (costeIrpfInput) costeIrpfInput.value = data.costes.coste_irpf;
+                actualizarPendiente();
+
+                setInfo(`Aplicado tramo ${data.tramo} (${data.rango}).`, false);
+            } catch (_error) {
+                limpiarCostes();
+                setInfo("No se pudo conectar con el cálculo de tramos.", true);
+            }
+        }
+
+        cacheNetoInput.addEventListener("blur", calcularCostes);
+        if (importeEntregadoInput) {
+            importeEntregadoInput.addEventListener("input", actualizarPendiente);
+        }
+        actualizarPendiente();
+    })();
+</script>
+{% endblock %}

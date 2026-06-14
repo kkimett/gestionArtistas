@@ -1,0 +1,15 @@
+[Unit]
+Description=GestionArtistas Django application
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/gestionArtistas
+EnvironmentFile=/var/www/gestionArtistas/.env
+ExecStart=/var/www/gestionArtistas/.venv/bin/gunicorn gestion_artistas.wsgi:application --config /var/www/gestionArtistas/deploy/gunicorn.conf.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

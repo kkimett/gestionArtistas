@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Acceso{% endblock %}
+
+{% block extra_css %}
+.login-wrap { max-width: 460px; margin: 40px auto; }
+.field { margin-bottom: 14px; }
+label { display: block; margin-bottom: 6px; font-weight: 700; }
+.actions { margin-top: 16px; }
+{% endblock %}
+
+{% block content %}
+<div class="login-wrap panel">
+    <h1>Acceso</h1>
+    <p class="meta">Inicia sesion para acceder a la gestion de artistas.</p>
+
+    {% if form.non_field_errors %}
+        <div class="errors">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <form method="post">
+        {% csrf_token %}
+        <div class="field">
+            {{ form.username.label_tag }}
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+        <div class="field">
+            {{ form.password.label_tag }}
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+        <div class="actions">
+            <button type="submit" class="button">Entrar</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

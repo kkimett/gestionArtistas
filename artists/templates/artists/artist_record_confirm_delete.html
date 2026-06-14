@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Borrar registro{% endblock %}
+
+{% block extra_css %}
+.panel { max-width: 700px; margin: 0 auto; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+{% endblock %}
+
+{% block content %}
+    <div class="panel">
+        <h1>Borrar registro</h1>
+        <p>Vas a borrar el registro de <strong>{{ object.artista.nombre_completo }}</strong> con fecha de alta <strong>{{ object.fecha_alta }}</strong>. Esta acción no se puede deshacer.</p>
+        <form method="post">
+            {% csrf_token %}
+            <div class="actions">
+                <button class="button danger" type="submit">Sí, borrar</button>
+                <a class="button" href="{% url 'artists:record-list' %}">Cancelar</a>
+            </div>
+        </form>
+    </div>
+{% endblock %}
