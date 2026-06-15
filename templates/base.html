@@ -25,6 +25,27 @@
             background: var(--color-bg);
         }
 
+        .app-layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .app-sidebar {
+            width: 260px;
+            background: var(--color-panel);
+            border-right: 1px solid #e5e7eb;
+            box-shadow: var(--shadow);
+            padding: 20px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .app-main {
+            flex: 1;
+            min-width: 0;
+        }
+
         .container {
             width: calc(100% - 24px);
             max-width: none;
@@ -32,46 +53,34 @@
             padding: 12px;
         }
 
-        .app-header {
-            background: var(--color-panel);
-            border-bottom: 1px solid #e5e7eb;
-            box-shadow: var(--shadow);
-        }
-
-        .app-header-inner {
-            width: calc(100% - 24px);
-            max-width: none;
-            margin: 0 auto;
-            padding: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-        }
-
         .brand {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
             text-decoration: none;
             color: var(--color-text);
             font-weight: 700;
-            font-size: 18px;
+            font-size: 16px;
         }
 
         .brand-logo {
-            height: 44px;
+            height: 52px;
             width: auto;
             border-radius: 8px;
             display: block;
             object-fit: cover;
         }
 
-        .top-nav {
+        .side-nav {
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 10px;
-            flex-wrap: wrap;
+            width: 100%;
+        }
+
+        .side-nav form {
+            margin: 0;
+            width: 100%;
         }
 
         .button {
@@ -84,6 +93,11 @@
             border: 0;
             cursor: pointer;
             font-size: 14px;
+        }
+
+        .side-nav .button {
+            width: 90%;
+            text-align: left;
         }
 
         .button.secondary {
@@ -123,34 +137,51 @@
             padding-left: 18px;
         }
 
+        @media (max-width: 900px) {
+            .app-layout {
+                flex-direction: column;
+            }
+
+            .app-sidebar {
+                width: auto;
+                border-right: 0;
+                border-bottom: 1px solid #e5e7eb;
+            }
+
+            .side-nav .button {
+                text-align: center;
+            }
+        }
+
         {% block extra_css %}{% endblock %}
     </style>
 </head>
 <body>
-    <header class="app-header">
-        <div class="app-header-inner">
+    <div class="app-layout">
+        <aside class="app-sidebar">
             <a href="{% url 'artists:list' %}" class="brand">
                 <img class="brand-logo" src="{% static 'img/logo.jpeg' %}" alt="Logo">
                 <span>Gestion de Artistas</span>
             </a>
             {% if user.is_authenticated %}
-            <nav class="top-nav">
+            <nav class="side-nav">
                 <a class="button secondary" href="{% url 'artists:list' %}">Artistas</a>
+                <a class="button secondary" href="{% url 'artists:grouping-list' %}">Asociaciones</a>
                 <a class="button secondary" href="{% url 'artists:record-list' %}">Registros</a>
                 <a class="button secondary" href="{% url 'billing:payment-summary' %}">Pagos</a>
-                <a class="button secondary" href="{% url 'artists:create' %}">Nuevo artista</a>
-                <form method="post" action="{% url 'logout' %}" style="margin:0;">
+                <!--a class="button secondary" href="{% url 'artists:create' %}">Nuevo artista</a-->
+                <form method="post" action="{% url 'logout' %}">
                     {% csrf_token %}
                     <button type="submit" class="button">Cerrar sesion</button>
                 </form>
             </nav>
             {% endif %}
-        </div>
-    </header>
+        </aside>
 
-    <main class="container">
-        {% block content %}{% endblock %}
-    </main>
+        <main class="app-main container">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
 
     {% block extra_js %}{% endblock %}
 </body>

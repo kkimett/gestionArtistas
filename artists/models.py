@@ -5,6 +5,7 @@ class Grouping(models.Model):
     nombre = models.CharField(max_length=200, unique=True)
     descripcion = models.TextField(blank=True)
     activo = models.BooleanField(default=True)
+    artistas = models.ManyToManyField("Artist", blank=True, related_name="agrupaciones")
     creado_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -72,6 +73,10 @@ class PriceBracket(models.Model):
 class Artist(models.Model):
     nombre_completo = models.CharField(max_length=255)
     dni_nie = models.CharField(max_length=20, unique=True)
+    irpf = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
+    telefono = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    prl = models.BooleanField(default=False, verbose_name="PRL")
     cuenta_bancaria = models.CharField(max_length=34, blank=True)
     numero_seguridad_social = models.CharField(max_length=30)
     creado_en = models.DateTimeField(auto_now_add=True)
@@ -104,7 +109,7 @@ class ArtistRecord(models.Model):
     tipo_irpf = models.DecimalField(max_digits=5, decimal_places=2, default=15.00)
     fecha_alta = models.DateField()
     fecha_baja = models.DateField(null=True, blank=True)
-    solicitud_a1 = models.BooleanField(default=False)
+    solicitud_a1 = models.BooleanField(default=False, verbose_name="Solicitud A1")
     proceso_cancelado = models.BooleanField(default=False)
     tipo_registro = models.CharField(max_length=10, choices=RegistrationType.choices, default=RegistrationType.SOLO)
     agrupacion = models.ForeignKey(Grouping, null=True, blank=True, on_delete=models.SET_NULL, related_name="registros_artistas")

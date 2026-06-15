@@ -26,14 +26,14 @@ th { background: #f9fafb; }
                 <p class="meta">Ficha maestra de artistas para carga inicial y mantenimiento básico.</p>
             </div>
             <div class="header-actions">
-                <a class="button secondary" href="{% url 'artists:record-list' %}">Ver registros</a>
+                <!--a class="button secondary" href="{% url 'artists:record-list' %}">Ver registros</a-->
                 <a class="button" href="{% url 'artists:create' %}">Añadir artista</a>
             </div>
         </div>
         <form class="filters" method="get">
             <div>
                 <label for="q">Buscar</label>
-                <input id="q" name="q" value="{{ filter_values.q }}" placeholder="Nombre, DNI, cuenta o SS">
+                <input id="q" name="q" value="{{ filter_values.q }}" placeholder="Nombre, DNI, teléfono, email, grupo...">
             </div>
             <div class="filter-actions">
                 <button class="button" type="submit">Filtrar</button>
@@ -47,6 +47,11 @@ th { background: #f9fafb; }
                     <tr>
                         <th>Nombre</th>
                         <th>DNI/NIE</th>
+                        <th>IRPF</th>
+                        <th>Teléfono</th>
+                        <th>Email</th>
+                        <th>PRL</th>
+                        <th>Grupos asociados</th>
                         <th>Cuenta bancaria</th>
                         <th>Seguridad Social</th>
                         <th>Registros</th>
@@ -58,18 +63,33 @@ th { background: #f9fafb; }
                     <tr>
                         <td>{{ artist.nombre_completo }}</td>
                         <td>{{ artist.dni_nie }}</td>
+                        <td>{{ artist.irpf }}%</td>
+                        <td>{{ artist.telefono|default:"-" }}</td>
+                        <td>{{ artist.email|default:"-" }}</td>
+                        <td>{% if artist.prl %}Sí{% else %}No{% endif %}</td>
+                        <td>
+                            {% if artist.agrupaciones.all %}
+                                {% for grouping in artist.agrupaciones.all %}
+                                    {{ grouping.nombre }}{% if not forloop.last %}, {% endif %}
+                                {% empty %}
+                                    -
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
                         <td>{{ artist.cuenta_bancaria|default:"-" }}</td>
                         <td>{{ artist.numero_seguridad_social }}</td>
                         <td>{{ artist.total_registros }}</td>
                         <td class="actions">
-                            <a class="button" href="{% url 'artists:record-create' %}?artista={{ artist.pk }}">Nuevo registro</a>
+                            <!--a class="button" href="{% url 'artists:record-create' %}?artista={{ artist.pk }}">Nuevo registro</a-->
                             <a class="button secondary" href="{% url 'artists:record-list' %}?artista={{ artist.pk }}">Ver registros</a>
                             <a class="button secondary" href="{% url 'artists:update' artist.pk %}">Editar</a>
                             <a class="button danger" href="{% url 'artists:delete' artist.pk %}">Borrar</a>
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="6">No hay artistas todavía.</td></tr>
+                    <tr><td colspan="11">No hay artistas todavía.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

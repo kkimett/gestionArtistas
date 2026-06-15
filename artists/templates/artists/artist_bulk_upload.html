@@ -40,9 +40,12 @@
 
     <div class="help-box">
         <strong>Columnas obligatorias:</strong> {{ required_columns|join:", " }}
+        {% if optional_columns %}
+            <p><strong>Columnas opcionales:</strong> {{ optional_columns|join:", " }}</p>
+        {% endif %}
         <p style="margin-bottom: 8px;">Ejemplo de cabecera y fila:</p>
-        <div class="sample">nombre_completo,dni_nie,cuenta_bancaria,numero_seguridad_social
-Ana Perez,12345678Z,ES9121000418450200051332,28/1234567890</div>
+        <div class="sample">nombre_completo,dni_nie,cuenta_bancaria,numero_seguridad_social,irpf,telefono,email,prl
+Ana Perez,12345678Z,ES9121000418450200051332,28/1234567890,15,600123123,ana@email.com,si</div>
     </div>
 
     {% if processed_count %}

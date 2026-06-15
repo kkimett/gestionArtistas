@@ -7,9 +7,20 @@ from .models import Artist, ArtistRecord, Grouping
 
 
 class ArtistForm(forms.ModelForm):
+    agrupaciones = forms.ModelMultipleChoiceField(
+        queryset=Grouping.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={"size": 8}),
+    )
+
     field_order = [
         "nombre_completo",
         "dni_nie",
+        "irpf",
+        "telefono",
+        "email",
+        "prl",
+        "agrupaciones",
         "cuenta_bancaria",
         "numero_seguridad_social",
     ]
@@ -19,9 +30,19 @@ class ArtistForm(forms.ModelForm):
         fields = [
             "nombre_completo",
             "dni_nie",
+            "irpf",
+            "telefono",
+            "email",
+            "prl",
             "cuenta_bancaria",
             "numero_seguridad_social",
         ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["agrupaciones"].queryset = Grouping.objects.order_by("nombre")
+        if self.instance and self.instance.pk:
+            self.fields["agrupaciones"].initial = self.instance.agrupaciones.all()
 
     def clean_dni_nie(self):
         value = self.cleaned_data["dni_nie"].strip().upper()
@@ -68,6 +89,12 @@ class ArtistForm(forms.ModelForm):
             raise ValidationError("El IBAN no es válido.")
 
         return value
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+        if commit:
+            instance.agrupaciones.set(self.cleaned_data.get("agrupaciones", []))
+        return instance
 
 
 class ArtistRecordForm(forms.ModelForm):
@@ -173,10 +200,38 @@ class ArtistRecordForm(forms.ModelForm):
 class GroupingForm(forms.ModelForm):
     class Meta:
         model = Grouping
-        fields = ["nombre", "descripcion", "activo"]
+        fields = ["nombre", "descripcion", "activo", "artistas"]
         widgets = {
             "descripcion": forms.Textarea(attrs={"rows": 4}),
+            "artistas": forms.SelectMultiple(attrs={"size": 12}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["artistas"].queryset = Artist.objects.order_by("nombre_completo")
+        self.fields["artistas"].required = False
+        self.selected_artist_ids = self._get_selected_artist_ids()
+
+    def _get_selected_artist_ids(self):
+        if self.is_bound:
+            return [str(value) for value in self.data.getlist("artistas") if str(value).strip()]
+
+        selected = self.initial.get("artistas")
+        if selected is None and self.instance and self.instance.pk:
+            selected = self.instance.artistas.values_list("pk", flat=True)
+        if selected is None:
+            return []
+
+        if isinstance(selected, (str, int)):
+            selected = [selected]
+
+        normalized = []
+        for value in selected:
+            normalized.append(str(getattr(value, "pk", value)))
+        return normalized
+
+    def save(self, commit=True):
+        return super().save(commit=commit)
 
 
 class ArtistCSVUploadForm(forms.Form):

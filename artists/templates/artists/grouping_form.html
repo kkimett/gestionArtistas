@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Nueva agrupacion{% endblock %}
+{% block title %}{% if object %}Editar agrupación{% else %}Nueva agrupación{% endif %}{% endblock %}
 
 {% block extra_css %}
 .panel { max-width: 760px; margin: 0 auto; }
@@ -8,12 +8,23 @@
 .checkbox-field { display: flex; align-items: center; gap: 8px; }
 .checkbox-field input { width: auto; }
 .actions { display: flex; gap: 12px; margin-top: 16px; }
+.artist-transfer { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; }
+.artist-column { display: grid; gap: 6px; }
+.artist-column label { font-weight: 600; }
+.search-input { width: 100%; }
+.artist-column select { min-height: 280px; }
+.transfer-controls { display: grid; gap: 8px; }
+.transfer-controls .button { min-width: 54px; text-align: center; }
+@media (max-width: 900px) {
+    .artist-transfer { grid-template-columns: 1fr; }
+    .transfer-controls { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 {% endblock %}
 
 {% block content %}
     <div class="panel">
-        <h1>Nueva agrupación</h1>
-        <p>Crea una agrupación para poder asignarla al artista.</p>
+        <h1>{% if object %}Editar agrupación{% else %}Nueva agrupación{% endif %}</h1>
+        <p>Define la agrupación y selecciona los artistas que quedarán asociados.</p>
 
         <form method="post">
             {% csrf_token %}
@@ -40,14 +51,144 @@
                 {{ form.activo.label_tag }}
             </div>
 
+            <div class="field">
+                {{ form.artistas.label_tag }}
+                {% with selected_ids=form.selected_artist_ids %}
+                <div class="artist-transfer">
+                    <div class="artist-column">
+                        <label for="artists-available">Disponibles</label>
+                        <input id="search-available" class="search-input" type="text" placeholder="Buscar por nombre...">
+                        <select id="artists-available" multiple>
+                            {% for artist in form.artistas.field.queryset %}
+                                {% if not selected_ids or artist.pk|stringformat:"s" not in selected_ids %}
+                                    <option value="{{ artist.pk }}">{{ artist.nombre_completo }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="transfer-controls">
+                        <button type="button" class="button secondary" id="add-selected">&gt;</button>
+                        <button type="button" class="button secondary" id="add-all">&gt;&gt;</button>
+                        <button type="button" class="button secondary" id="remove-selected">&lt;</button>
+                        <button type="button" class="button secondary" id="remove-all">&lt;&lt;</button>
+                    </div>
+                    <div class="artist-column">
+                        <label for="artists-selected">Asociados</label>
+                        <input id="search-selected" class="search-input" type="text" placeholder="Buscar por nombre...">
+                        <select id="artists-selected" name="artistas" multiple>
+                            {% for artist in form.artistas.field.queryset %}
+                                {% if selected_ids and artist.pk|stringformat:"s" in selected_ids %}
+                                    <option value="{{ artist.pk }}" selected>{{ artist.nombre_completo }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                {% endwith %}
+                {{ form.artistas.errors }}
+                <div class="meta">Usa los botones para mover artistas entre disponibles y asociados.</div>
+            </div>
+
             <div class="actions">
                 <button class="button" type="submit">Guardar agrupación</button>
+                <a class="button secondary" href="{% url 'artists:grouping-list' %}">Ver agrupaciones</a>
                 {% if next %}
                     <a class="button secondary" href="{{ next }}">Cancelar</a>
                 {% else %}
-                    <a class="button secondary" href="{% url 'artists:list' %}">Cancelar</a>
+                    <a class="button secondary" href="{% url 'artists:grouping-list' %}">Cancelar</a>
                 {% endif %}
             </div>
         </form>
     </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const available = document.getElementById("artists-available");
+        const selected = document.getElementById("artists-selected");
+        const addSelectedBtn = document.getElementById("add-selected");
+        const addAllBtn = document.getElementById("add-all");
+        const removeSelectedBtn = document.getElementById("remove-selected");
+        const removeAllBtn = document.getElementById("remove-all");
+        const searchAvailable = document.getElementById("search-available");
+        const searchSelected = document.getElementById("search-selected");
+
+        if (!available || !selected) {
+            return;
+        }
+
+        function moveOptions(fromSelect, toSelect, onlySelected) {
+            const options = Array.from(fromSelect.options);
+            options.forEach((option) => {
+                if (!onlySelected || option.selected) {
+                    option.selected = false;
+                    toSelect.appendChild(option);
+                }
+            });
+        }
+
+        function selectAllAssigned() {
+            Array.from(selected.options).forEach((option) => {
+                option.selected = true;
+            });
+        }
+
+        function applyFilter(selectElement, term) {
+            const normalized = (term || "").toLowerCase().trim();
+            Array.from(selectElement.options).forEach((option) => {
+                const label = option.text.toLowerCase();
+                option.hidden = Boolean(normalized) && !label.includes(normalized);
+            });
+        }
+
+        function reapplyFilters() {
+            applyFilter(available, searchAvailable?.value || "");
+            applyFilter(selected, searchSelected?.value || "");
+        }
+
+        addSelectedBtn?.addEventListener("click", function () {
+            moveOptions(available, selected, true);
+            reapplyFilters();
+        });
+
+        addAllBtn?.addEventListener("click", function () {
+            moveOptions(available, selected, false);
+            reapplyFilters();
+        });
+
+        removeSelectedBtn?.addEventListener("click", function () {
+            moveOptions(selected, available, true);
+            reapplyFilters();
+        });
+
+        removeAllBtn?.addEventListener("click", function () {
+            moveOptions(selected, available, false);
+            reapplyFilters();
+        });
+
+        available.addEventListener("dblclick", function () {
+            moveOptions(available, selected, true);
+            reapplyFilters();
+        });
+
+        selected.addEventListener("dblclick", function () {
+            moveOptions(selected, available, true);
+            reapplyFilters();
+        });
+
+        searchAvailable?.addEventListener("input", function () {
+            applyFilter(available, searchAvailable.value);
+        });
+
+        searchSelected?.addEventListener("input", function () {
+            applyFilter(selected, searchSelected.value);
+        });
+
+        const form = selected.closest("form");
+        form?.addEventListener("submit", selectAllAssigned);
+
+        reapplyFilters();
+    })();
+</script>
 {% endblock %}

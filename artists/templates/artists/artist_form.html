@@ -42,6 +42,31 @@ legend { font-weight: 700; padding: 0 8px; }
                             {{ form.dni_nie.errors }}
                         </div>
                         <div class="field">
+                            {{ form.irpf.label_tag }}
+                            {{ form.irpf }}
+                            {{ form.irpf.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.telefono.label_tag }}
+                            {{ form.telefono }}
+                            {{ form.telefono.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.email.label_tag }}
+                            {{ form.email }}
+                            {{ form.email.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.agrupaciones.label_tag }}
+                            {{ form.agrupaciones }}
+                            {{ form.agrupaciones.errors }}
+                        </div>
+                        <div class="field checkbox-field">
+                            {{ form.prl }}
+                            {{ form.prl.label_tag }}
+                            {{ form.prl.errors }}
+                        </div>
+                        <div class="field">
                             {{ form.cuenta_bancaria.label_tag }}
                             {{ form.cuenta_bancaria }}
                             {{ form.cuenta_bancaria.errors }}

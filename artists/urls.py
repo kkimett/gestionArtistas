@@ -10,6 +10,8 @@ from .views import (
     ArtistRecordUpdateView,
     ArtistUpdateView,
     GroupingCreateView,
+    GroupingListView,
+    GroupingUpdateView,
     artist_bulk_upload_view,
     calcular_costes_por_tramo,
 )
@@ -20,7 +22,9 @@ urlpatterns = [
     path("", ArtistListView.as_view(), name="list"),
     path("registros/", ArtistRecordListView.as_view(), name="record-list"),
     path("api/calcular-costes/", calcular_costes_por_tramo, name="calcular-costes"),
+    path("agrupaciones/", GroupingListView.as_view(), name="grouping-list"),
     path("agrupaciones/nueva/", GroupingCreateView.as_view(), name="grouping-create"),
+    path("agrupaciones/<int:pk>/editar/", GroupingUpdateView.as_view(), name="grouping-update"),
     path("new/", ArtistCreateView.as_view(), name="create"),
     path("bulk-upload/", artist_bulk_upload_view, name="bulk-upload"),
     path("registros/new/", ArtistRecordCreateView.as_view(), name="record-create"),

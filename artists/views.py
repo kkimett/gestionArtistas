@@ -55,7 +55,12 @@ class ArtistListView(LoginRequiredMixin, ListView):
     context_object_name = "artists"
 
     def get_queryset(self):
-        queryset = super().get_queryset().annotate(total_registros=Count("registros"))
+        queryset = (
+            super()
+            .get_queryset()
+            .prefetch_related("agrupaciones")
+            .annotate(total_registros=Count("registros"))
+        )
         query = self.request.GET.get("q", "").strip()
 
         if query:
@@ -64,7 +69,11 @@ class ArtistListView(LoginRequiredMixin, ListView):
                 | Q(dni_nie__icontains=query)
                 | Q(numero_seguridad_social__icontains=query)
                 | Q(cuenta_bancaria__icontains=query)
+                | Q(telefono__icontains=query)
+                | Q(email__icontains=query)
+                | Q(agrupaciones__nombre__icontains=query)
             )
+            queryset = queryset.distinct()
 
         return queryset
 
@@ -154,10 +163,17 @@ def artist_bulk_upload_view(request):
         "cuenta_bancaria",
         "numero_seguridad_social",
     ]
+    optional_columns = [
+        "irpf",
+        "telefono",
+        "email",
+        "prl",
+    ]
     form = ArtistCSVUploadForm(request.POST or None, request.FILES or None)
     context = {
         "form": form,
         "required_columns": required_columns,
+        "optional_columns": optional_columns,
         "created_count": 0,
         "processed_count": 0,
         "error_rows": [],
@@ -203,6 +219,10 @@ def artist_bulk_upload_view(request):
                 data={
                     "nombre_completo": normalized_row.get("nombre_completo", ""),
                     "dni_nie": normalized_row.get("dni_nie", ""),
+                    "irpf": normalized_row.get("irpf", "") or 15,
+                    "telefono": normalized_row.get("telefono", ""),
+                    "email": normalized_row.get("email", ""),
+                    "prl": normalized_row.get("prl", "").strip().lower() in {"1", "si", "sí", "true", "yes", "y"},
                     "cuenta_bancaria": normalized_row.get("cuenta_bancaria", ""),
                     "numero_seguridad_social": normalized_row.get("numero_seguridad_social", ""),
                 }
@@ -287,7 +307,7 @@ class GroupingCreateView(LoginRequiredMixin, CreateView):
     model = Grouping
     form_class = GroupingForm
     template_name = "artists/grouping_form.html"
-    success_url = reverse_lazy("artists:list")
+    success_url = reverse_lazy("artists:grouping-list")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -300,3 +320,24 @@ class GroupingCreateView(LoginRequiredMixin, CreateView):
             separator = "&" if "?" in next_url else "?"
             return f"{next_url}{separator}{urlencode({'agrupacion_creada': self.object.pk})}"
         return self.success_url
+
+
+class GroupingListView(LoginRequiredMixin, ListView):
+    model = Grouping
+    template_name = "artists/grouping_list.html"
+    context_object_name = "groupings"
+
+    def get_queryset(self):
+        return (
+            Grouping.objects
+            .prefetch_related("artistas")
+            .annotate(total_artistas=Count("artistas"))
+            .order_by("nombre")
+        )
+
+
+class GroupingUpdateView(LoginRequiredMixin, UpdateView):
+    model = Grouping
+    form_class = GroupingForm
+    template_name = "artists/grouping_form.html"
+    success_url = reverse_lazy("artists:grouping-list")

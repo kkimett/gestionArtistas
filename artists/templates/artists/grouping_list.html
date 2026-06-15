@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Agrupaciones{% endblock %}
+
+{% block extra_css %}
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.artist-list { margin: 0; padding-left: 18px; }
+.header-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+@media (max-width: 900px) {
+    .header-actions { flex-direction: column; align-items: flex-start; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <div class="header-actions">
+        <div>
+            <h1 style="margin: 0;">Agrupaciones</h1>
+            <p class="meta" style="margin: 8px 0 0;">Gestiona asociaciones y sus artistas vinculados.</p>
+        </div>
+        <a class="button" href="{% url 'artists:grouping-create' %}">Nueva agrupación</a>
+    </div>
+
+    {% if groupings %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Estado</th>
+                    <th>Artistas asociados</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for grouping in groupings %}
+                <tr>
+                    <td>
+                        <strong>{{ grouping.nombre }}</strong>
+                        {% if grouping.descripcion %}
+                        <div class="meta">{{ grouping.descripcion }}</div>
+                        {% endif %}
+                    </td>
+                    <td>{% if grouping.activo %}Activa{% else %}Inactiva{% endif %}</td>
+                    <td>
+                        {% if grouping.total_artistas %}
+                        <ul class="artist-list">
+                            {% for artist in grouping.artistas.all %}
+                            <li>{{ artist.nombre_completo }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <span class="meta">Sin artistas asociados</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="actions">
+                            <a class="button secondary" href="{% url 'artists:grouping-update' grouping.pk %}">Editar</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="meta">No hay agrupaciones creadas todavía.</p>
+    {% endif %}
+</div>
+{% endblock %}
