@@ -56,15 +56,10 @@ class PriceBracket(models.Model):
 
     def calculate_costs(self, cache_net, irpf_percentage=None, honorarios_percentage=None):
         """
-        Back-calculation desde Base Factura (cache_net) hasta Neto Líquido del artista.
-        Régimen especial de artistas por día de la Seguridad Social.
-
-        Paso 1: Comisión de gestión sobre Base Factura.
-        Paso 2: Presupuesto de nómina disponible = Base Factura - Comisión.
-        Paso 3: Retribución bruta estimada = Presupuesto / (1 + % empresa total).
-        Paso 4: Base de cotización según tramo (= bruto en tramo 1, fija en tramos 2-4).
-        Paso 5: SS empresa y Salario Bruto Real Final.
-        Paso 6: SS trabajador, Base IRPF, Retención IRPF y Neto Líquido.
+        Cálculo desde Base Factura (cache_net) usando tramo por cache_neto.
+        La base de cotización se toma del tramo:
+        - Tramo 1: base = cache_neto.
+        - Tramos 2-4: base fija (importe_base).
         """
         porcentajes = CostPercentageSettings.get_solo()
 
@@ -95,23 +90,16 @@ class PriceBracket(models.Model):
         # Paso 2: Presupuesto de nómina disponible
         presupuesto_nomina = cache_net - coste_gestion
 
-        # Paso 3: Retribución bruta estimada (para ubicar el tramo correcto)
-        factor_empresa = Decimal("1") + porcentaje_empresa_total / Decimal("100")
-        bruto_estimado = presupuesto_nomina / factor_empresa
-
-        # --- Fuente 2: Tabla de Tramos (self / PriceBracket) ---
-        # Pasos 4 y 5: Base de cotización y Salario Bruto Real Final
+        # Base de cotización según tramo (tramo 1 usa cache_neto - honorarios)
         if self.numero_tramo == 1:
-            # Tramo 1: la base de cotización es la propia retribución bruta estimada
-            base_cotizacion = bruto_estimado
-            salario_bruto = bruto_estimado
+            base_cotizacion = cache_net - coste_gestion
         else:
-            # Tramos 2-4: base de cotización fija según tabla
-            base_cotizacion = self.importe_base or bruto_estimado
-            coste_ss_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
-            salario_bruto = presupuesto_nomina - coste_ss_empresa
+            base_cotizacion = self.importe_base or cache_net
 
         coste_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
+        salario_bruto = presupuesto_nomina - coste_empresa
+        if salario_bruto < 0:
+            salario_bruto = Decimal("0")
 
         # Paso 6: Deducciones del trabajador, IRPF y Neto Líquido
         coste_seguridad_social = base_cotizacion * (porcentaje_trabajador_total / Decimal("100"))
@@ -130,7 +118,6 @@ class PriceBracket(models.Model):
         return {
             "coste_gestion": coste_gestion,
             "presupuesto_nomina": presupuesto_nomina,
-            "bruto_estimado": bruto_estimado,
             "base_cotizacion": base_cotizacion,
             "salario_bruto": salario_bruto,
             "coste_empresa": coste_empresa,
@@ -238,29 +225,11 @@ class ArtistRecord(models.Model):
 
     def calculate_and_update_costs(self):
         """Calcula y actualiza automáticamente los costos según el tramo y cache_net"""
-        porcentajes = CostPercentageSettings.get_solo()
         honorario_artista = None
         if self.artista_id and self.artista and self.artista.honorario is not None:
             honorario_artista = self.artista.honorario
 
-        # Calcular bruto estimado para determinar el tramo correcto (back-calculation)
-        porcentaje_honorarios_efectivo = (
-            honorario_artista if honorario_artista is not None else porcentajes.porcentaje_honorarios
-        )
-        porcentaje_empresa_total = (
-            porcentajes.contingencias_comunes_empresa
-            + porcentajes.mei_empresa
-            + porcentajes.desempleo_empresa
-            + porcentajes.formacion_empresa
-            + porcentajes.at_ep_empresa
-            + porcentajes.fogasa_empresa
-        )
-        factor_empresa = Decimal("1") + porcentaje_empresa_total / Decimal("100")
-        comision_previa = self.cache_neto * (porcentaje_honorarios_efectivo / Decimal("100"))
-        presupuesto_previo = self.cache_neto - comision_previa
-        bruto_estimado = presupuesto_previo / factor_empresa
-
-        bracket = PriceBracket.get_bracket_for_amount(bruto_estimado)
+        bracket = PriceBracket.get_bracket_for_amount(self.cache_neto)
         if bracket:
             costs = bracket.calculate_costs(
                 self.cache_neto,

@@ -49,26 +49,9 @@ def calcular_costes_por_tramo(request):
         if artista and artista.honorario is not None:
             honorario_artista = artista.honorario
 
-    # Back-calculation: estimar el bruto del artista para determinar el tramo correcto
-    porcentaje_honorarios_efectivo = (
-        honorario_artista if honorario_artista is not None else porcentajes.porcentaje_honorarios
-    )
-    porcentaje_empresa_total_previo = (
-        porcentajes.contingencias_comunes_empresa
-        + porcentajes.mei_empresa
-        + porcentajes.desempleo_empresa
-        + porcentajes.formacion_empresa
-        + porcentajes.at_ep_empresa
-        + porcentajes.fogasa_empresa
-    )
-    factor_empresa = Decimal("1") + porcentaje_empresa_total_previo / Decimal("100")
-    comision_previa = importe_cache_neto * (porcentaje_honorarios_efectivo / Decimal("100"))
-    presupuesto_previo = importe_cache_neto - comision_previa
-    bruto_estimado = presupuesto_previo / factor_empresa
-
-    tramo = PriceBracket.get_bracket_for_amount(bruto_estimado)
+    tramo = PriceBracket.get_bracket_for_amount(importe_cache_neto)
     if not tramo:
-        return JsonResponse({"ok": False, "error": "No existe un tramo activo para esa retribución estimada."}, status=404)
+        return JsonResponse({"ok": False, "error": "No existe un tramo activo para ese caché neto."}, status=404)
 
     costes = tramo.calculate_costs(
         importe_cache_neto,
