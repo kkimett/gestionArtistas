@@ -12,12 +12,17 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from .forms import ArtistCSVUploadForm, ArtistForm, ArtistRecordForm, GroupingForm
-from .models import Artist, ArtistRecord, Grouping, PriceBracket
+from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, PriceBracket
 
 
 @login_required
 def calcular_costes_por_tramo(request):
     cache_neto = request.GET.get("cache_neto", "").strip()
+    tipo_irpf = request.GET.get("tipo_irpf", "").strip()
+    artista_id = request.GET.get("artista", "").strip()
+    tipo_registro = request.GET.get("tipo_registro", "").strip()
+    agrupacion_id = request.GET.get("agrupacion", "").strip()
+    honorario_artista = None
     if not cache_neto:
         return JsonResponse({"ok": False, "error": "Debes indicar un caché neto."}, status=400)
 
@@ -29,16 +34,138 @@ def calcular_costes_por_tramo(request):
     if importe_cache_neto <= 0:
         return JsonResponse({"ok": False, "error": "El caché neto debe ser mayor que 0."}, status=400)
 
+    porcentaje_irpf = None
+    if tipo_irpf:
+        try:
+            porcentaje_irpf = Decimal(tipo_irpf)
+        except InvalidOperation:
+            return JsonResponse({"ok": False, "error": "El tipo de IRPF no tiene un formato válido."}, status=400)
+        if porcentaje_irpf < 0:
+            return JsonResponse({"ok": False, "error": "El tipo de IRPF no puede ser negativo."}, status=400)
+
     tramo = PriceBracket.get_bracket_for_amount(importe_cache_neto)
     if not tramo:
         return JsonResponse({"ok": False, "error": "No existe un tramo activo para ese caché neto."}, status=404)
 
-    costes = tramo.calculate_costs(importe_cache_neto)
+    porcentajes = CostPercentageSettings.get_solo()
+    if artista_id:
+        artista = Artist.objects.filter(pk=artista_id).first()
+        if artista and artista.honorario is not None:
+            honorario_artista = artista.honorario
+
+    costes = tramo.calculate_costs(
+        importe_cache_neto,
+        irpf_percentage=porcentaje_irpf,
+        honorarios_percentage=honorario_artista,
+    )
+    base_calculo = costes.get("base_calculo") or (
+        importe_cache_neto if tramo.numero_tramo == 1 else (tramo.importe_base or importe_cache_neto)
+    )
+    base_despues_honorarios = costes.get("base_despues_honorarios", base_calculo)
+
+    detalle_ss = {
+        "contingencias_comunes_empresa": {
+            "porcentaje": porcentajes.contingencias_comunes_empresa,
+            "importe": base_calculo * (porcentajes.contingencias_comunes_empresa / Decimal("100")),
+        },
+        "contingencias_comunes_trabajador": {
+            "porcentaje": porcentajes.contingencias_comunes_trabajador,
+            "importe": base_calculo * (porcentajes.contingencias_comunes_trabajador / Decimal("100")),
+        },
+        "mei_empresa": {
+            "porcentaje": porcentajes.mei_empresa,
+            "importe": base_calculo * (porcentajes.mei_empresa / Decimal("100")),
+        },
+        "mei_trabajador": {
+            "porcentaje": porcentajes.mei_trabajador,
+            "importe": base_calculo * (porcentajes.mei_trabajador / Decimal("100")),
+        },
+        "desempleo_empresa": {
+            "porcentaje": porcentajes.desempleo_empresa,
+            "importe": base_calculo * (porcentajes.desempleo_empresa / Decimal("100")),
+        },
+        "desempleo_trabajador": {
+            "porcentaje": porcentajes.desempleo_trabajador,
+            "importe": base_calculo * (porcentajes.desempleo_trabajador / Decimal("100")),
+        },
+        "formacion_empresa": {
+            "porcentaje": porcentajes.formacion_empresa,
+            "importe": base_calculo * (porcentajes.formacion_empresa / Decimal("100")),
+        },
+        "formacion_trabajador": {
+            "porcentaje": porcentajes.formacion_trabajador,
+            "importe": base_calculo * (porcentajes.formacion_trabajador / Decimal("100")),
+        },
+        "at_ep_empresa": {
+            "porcentaje": porcentajes.at_ep_empresa,
+            "importe": base_calculo * (porcentajes.at_ep_empresa / Decimal("100")),
+        },
+        "fogasa_empresa": {
+            "porcentaje": porcentajes.fogasa_empresa,
+            "importe": base_calculo * (porcentajes.fogasa_empresa / Decimal("100")),
+        },
+    }
+
+    porcentaje_ss_total = (
+        porcentajes.contingencias_comunes_empresa
+        + porcentajes.mei_empresa
+        + porcentajes.desempleo_empresa
+        + porcentajes.formacion_empresa
+        + porcentajes.at_ep_empresa
+        + porcentajes.fogasa_empresa
+        + porcentajes.contingencias_comunes_trabajador
+        + porcentajes.mei_trabajador
+        + porcentajes.desempleo_trabajador
+        + porcentajes.formacion_trabajador
+    )
+
+    cantidad_artistas = Decimal("1")
+    if tipo_registro == ArtistRecord.RegistrationType.BAND and agrupacion_id:
+        try:
+            agrupacion = Grouping.objects.filter(pk=agrupacion_id).first()
+            if agrupacion:
+                total = agrupacion.artistas.count()
+                if total > 0:
+                    cantidad_artistas = Decimal(total)
+        except Exception:
+            cantidad_artistas = Decimal("1")
+
+    neto_por_artista = importe_cache_neto - (
+        costes["coste_gestion"]
+        + costes["coste_seguridad_social"]
+        + costes["coste_irpf"]
+    )
+    if neto_por_artista < 0:
+        neto_por_artista = Decimal("0")
+
+    iva_porcentaje = Decimal("21")
+    iva_importe = (importe_cache_neto * iva_porcentaje) / Decimal("100")
+    total_con_iva = importe_cache_neto + iva_importe
+
     return JsonResponse(
         {
             "ok": True,
             "tramo": tramo.numero_tramo,
             "rango": f"{tramo.rango_minimo} - {tramo.rango_maximo}",
+            "resumen": {
+                "iva_porcentaje": f"{iva_porcentaje:.2f}",
+                "iva_importe": f"{iva_importe:.2f}",
+                "total_con_iva": f"{total_con_iva:.2f}",
+                "porcentaje_ss_total": f"{porcentaje_ss_total:.4f}",
+                "porcentaje_irpf": f"{(porcentaje_irpf or Decimal('0')):.4f}",
+                "porcentaje_honorarios": f"{costes['porcentaje_honorarios_aplicado']:.4f}",
+                "base_despues_honorarios": f"{base_despues_honorarios:.2f}",
+                "detalle_ss": {
+                    key: {
+                        "porcentaje": f"{value['porcentaje']:.4f}",
+                        "importe": f"{value['importe']:.2f}",
+                    }
+                    for key, value in detalle_ss.items()
+                },
+                "neto_por_artista": f"{neto_por_artista:.2f}",
+                "cantidad_artistas": f"{cantidad_artistas:.0f}",
+                "neto_total": f"{(neto_por_artista * cantidad_artistas):.2f}",
+            },
             "costes": {
                 "coste_empresa": f"{costes['coste_empresa']:.2f}",
                 "coste_gestion": f"{costes['coste_gestion']:.2f}",
@@ -165,6 +292,7 @@ def artist_bulk_upload_view(request):
     ]
     optional_columns = [
         "irpf",
+        "honorario",
         "telefono",
         "email",
         "prl",
@@ -220,6 +348,7 @@ def artist_bulk_upload_view(request):
                     "nombre_completo": normalized_row.get("nombre_completo", ""),
                     "dni_nie": normalized_row.get("dni_nie", ""),
                     "irpf": normalized_row.get("irpf", "") or 15,
+                    "honorario": normalized_row.get("honorario", "") or None,
                     "telefono": normalized_row.get("telefono", ""),
                     "email": normalized_row.get("email", ""),
                     "prl": normalized_row.get("prl", "").strip().lower() in {"1", "si", "sí", "true", "yes", "y"},

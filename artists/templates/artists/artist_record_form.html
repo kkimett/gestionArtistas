@@ -21,6 +21,13 @@ legend { font-weight: 700; padding: 0 8px; }
 .info-tramo { margin-top: 8px; font-size: 13px; color: #1f2937; }
 .info-tramo.error { color: #b91c1c; }
 .field-help { margin-top: 6px; font-size: 13px; }
+.importe-resumen { margin-top: 14px; padding: 16px; border: 1px solid #d9d6e8; border-radius: 12px; background: #f5f3fa; color: #3e2a5e; }
+.importe-resumen .linea { margin: 0 0 10px; }
+.importe-resumen .linea strong { font-weight: 700; }
+.importe-resumen .destacado { margin-top: 16px; }
+.importe-resumen .valor-grande { font-size: 38px; font-weight: 700; line-height: 1.1; margin: 4px 0 12px; }
+.importe-resumen .muted { color: #6b7280; font-size: 12px; }
+.importe-resumen .sublinea { margin: 0 0 6px; font-size: 14px; }
 @media (max-width: 900px) {
     .grid-3 { grid-template-columns: 1fr; }
     .checkbox-group { grid-template-columns: 1fr; }
@@ -163,6 +170,30 @@ legend { font-weight: 700; padding: 0 8px; }
                             {{ form.coste_irpf.errors }}
                         </div>
                     </div>
+
+                    <div class="importe-resumen" id="importe-resumen">
+                        <p class="linea"><strong><span id="resumen-cache">0,00€</span> + IVA (<span id="resumen-iva-pct">21%</span>): <span id="resumen-total-iva">0,00€</span></strong> <span class="muted">(<span id="resumen-iva-importe">0,00€</span> de IVA)</span></p>
+                        <p class="linea"><strong>El coste de la SS:</strong> <span id="resumen-ss">0,00€</span></p>
+                        <p class="sublinea">Contingencias comunes empresa (<span id="resumen-cc-emp-pct">0%</span>): <span id="resumen-cc-emp-imp">0,00€</span></p>
+                        <p class="sublinea">Contingencias comunes trabajador (<span id="resumen-cc-tra-pct">0%</span>): <span id="resumen-cc-tra-imp">0,00€</span></p>
+                        <p class="sublinea">MEI empresa (<span id="resumen-mei-emp-pct">0%</span>): <span id="resumen-mei-emp-imp">0,00€</span></p>
+                        <p class="sublinea">MEI trabajador (<span id="resumen-mei-tra-pct">0%</span>): <span id="resumen-mei-tra-imp">0,00€</span></p>
+                        <p class="sublinea">Desempleo empresa (<span id="resumen-des-emp-pct">0%</span>): <span id="resumen-des-emp-imp">0,00€</span></p>
+                        <p class="sublinea">Desempleo trabajador (<span id="resumen-des-tra-pct">0%</span>): <span id="resumen-des-tra-imp">0,00€</span></p>
+                        <p class="sublinea">Formación empresa (<span id="resumen-for-emp-pct">0%</span>): <span id="resumen-for-emp-imp">0,00€</span></p>
+                        <p class="sublinea">Formación trabajador (<span id="resumen-for-tra-pct">0%</span>): <span id="resumen-for-tra-imp">0,00€</span></p>
+                        <p class="sublinea">AT y EP empresa (<span id="resumen-at-emp-pct">0%</span>): <span id="resumen-at-emp-imp">0,00€</span></p>
+                        <p class="sublinea">FOGASA empresa (<span id="resumen-fogasa-pct">0%</span>): <span id="resumen-fogasa-imp">0,00€</span></p>
+                        <p class="linea"><strong>Coste IRPF por artista (<span id="resumen-irpf-pct">0%</span>):</strong> <span id="resumen-irpf">0,00€</span></p>
+                        <p class="linea"><strong>Honorarios GestArt (<span id="resumen-honorarios-pct">0%</span>):</strong> <span id="resumen-honorarios">0,00€</span></p>
+
+                        <div class="destacado">
+                            <p class="linea"><strong>El neto a percibir por artista:</strong></p>
+                            <p class="valor-grande" id="resumen-neto-artista">0,00€</p>
+                            <p class="linea"><strong>El neto total (<span id="resumen-cantidad">1</span> artistas):</strong></p>
+                            <p class="valor-grande" id="resumen-neto-total">0,00€</p>
+                        </div>
+                    </div>
                 </fieldset>
 
                 <fieldset>
@@ -192,9 +223,48 @@ legend { font-weight: 700; padding: 0 8px; }
         const costeGestionInput = document.getElementById("id_coste_gestion");
         const costeSeguridadSocialInput = document.getElementById("id_coste_seguridad_social");
         const costeIrpfInput = document.getElementById("id_coste_irpf");
+        const tipoIrpfInput = document.getElementById("id_tipo_irpf");
+        const artistaInput = document.getElementById("id_artista");
+        const tipoRegistroInput = document.getElementById("id_tipo_registro");
+        const agrupacionInput = document.getElementById("id_agrupacion");
         const importeEntregadoInput = document.getElementById("id_importe_entregado");
         const importePendienteInput = document.getElementById("importe_pendiente_visual");
         const infoTramo = document.getElementById("info-tramo");
+
+        const resumenCache = document.getElementById("resumen-cache");
+        const resumenIvaPct = document.getElementById("resumen-iva-pct");
+        const resumenTotalIva = document.getElementById("resumen-total-iva");
+        const resumenIvaImporte = document.getElementById("resumen-iva-importe");
+        const resumenSs = document.getElementById("resumen-ss");
+        const resumenIrpfPct = document.getElementById("resumen-irpf-pct");
+        const resumenIrpf = document.getElementById("resumen-irpf");
+        const resumenHonorariosPct = document.getElementById("resumen-honorarios-pct");
+        const resumenHonorarios = document.getElementById("resumen-honorarios");
+        const resumenNetoArtista = document.getElementById("resumen-neto-artista");
+        const resumenCantidad = document.getElementById("resumen-cantidad");
+        const resumenNetoTotal = document.getElementById("resumen-neto-total");
+        const resumenCcEmpPct = document.getElementById("resumen-cc-emp-pct");
+        const resumenCcEmpImp = document.getElementById("resumen-cc-emp-imp");
+        const resumenCcTraPct = document.getElementById("resumen-cc-tra-pct");
+        const resumenCcTraImp = document.getElementById("resumen-cc-tra-imp");
+        const resumenMeiEmpPct = document.getElementById("resumen-mei-emp-pct");
+        const resumenMeiEmpImp = document.getElementById("resumen-mei-emp-imp");
+        const resumenMeiTraPct = document.getElementById("resumen-mei-tra-pct");
+        const resumenMeiTraImp = document.getElementById("resumen-mei-tra-imp");
+        const resumenDesEmpPct = document.getElementById("resumen-des-emp-pct");
+        const resumenDesEmpImp = document.getElementById("resumen-des-emp-imp");
+        const resumenDesTraPct = document.getElementById("resumen-des-tra-pct");
+        const resumenDesTraImp = document.getElementById("resumen-des-tra-imp");
+        const resumenForEmpPct = document.getElementById("resumen-for-emp-pct");
+        const resumenForEmpImp = document.getElementById("resumen-for-emp-imp");
+        const resumenForTraPct = document.getElementById("resumen-for-tra-pct");
+        const resumenForTraImp = document.getElementById("resumen-for-tra-imp");
+        const resumenAtEmpPct = document.getElementById("resumen-at-emp-pct");
+        const resumenAtEmpImp = document.getElementById("resumen-at-emp-imp");
+        const resumenFogasaPct = document.getElementById("resumen-fogasa-pct");
+        const resumenFogasaImp = document.getElementById("resumen-fogasa-imp");
+
+        let detalleSsCache = null;
 
         if (!cacheNetoInput) {
             return;
@@ -220,17 +290,54 @@ legend { font-weight: 700; padding: 0 8px; }
             return Number.isFinite(parsed) ? parsed : 0;
         }
 
+        function formatMoney(value) {
+            const number = toNumber(value);
+            return number.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "€";
+        }
+
+        function formatPercent(value, decimals) {
+            const number = toNumber(value);
+            return number.toLocaleString("es-ES", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + "%";
+        }
+
+        function actualizarResumenDesdeCampos() {
+            const cacheNeto = toNumber(cacheNetoInput?.value);
+            const costeGestion = toNumber(costeGestionInput?.value);
+            const costeSeguridadSocial = toNumber(costeSeguridadSocialInput?.value);
+            const costeIrpf = toNumber(costeIrpfInput?.value);
+            const tipoIrpf = toNumber(tipoIrpfInput?.value);
+
+            const ivaPct = 21;
+            const ivaImporte = cacheNeto * ivaPct / 100;
+            const totalConIva = cacheNeto + ivaImporte;
+            const ssImporte = costeSeguridadSocial;
+            const netoArtista = Math.max(0, cacheNeto - (costeGestion + costeSeguridadSocial + costeIrpf));
+
+            if (resumenCache) resumenCache.textContent = formatMoney(cacheNeto);
+            if (resumenIvaPct) resumenIvaPct.textContent = formatPercent(ivaPct, 0);
+            if (resumenTotalIva) resumenTotalIva.textContent = formatMoney(totalConIva);
+            if (resumenIvaImporte) resumenIvaImporte.textContent = formatMoney(ivaImporte);
+            if (resumenSs) resumenSs.textContent = formatMoney(ssImporte);
+            if (resumenIrpfPct) resumenIrpfPct.textContent = formatPercent(tipoIrpf, 2);
+            if (resumenIrpf) resumenIrpf.textContent = formatMoney(costeIrpf);
+            if (resumenHonorarios) resumenHonorarios.textContent = formatMoney(costeGestion);
+            if (resumenNetoArtista) resumenNetoArtista.textContent = formatMoney(netoArtista);
+            if (resumenNetoTotal && resumenCantidad) {
+                const cantidad = Math.max(1, Math.floor(toNumber(resumenCantidad.textContent)));
+                resumenNetoTotal.textContent = formatMoney(netoArtista * cantidad);
+            }
+        }
+
         function actualizarPendiente() {
             if (!importePendienteInput) {
                 return;
             }
             const cacheNeto = toNumber(cacheNetoInput?.value);
-            const costeEmpresa = toNumber(costeEmpresaInput?.value);
             const costeGestion = toNumber(costeGestionInput?.value);
             const costeSeguridadSocial = toNumber(costeSeguridadSocialInput?.value);
             const costeIrpf = toNumber(costeIrpfInput?.value);
             const importeEntregado = toNumber(importeEntregadoInput?.value);
-            const netoPago = cacheNeto - (costeEmpresa + costeGestion + costeSeguridadSocial + costeIrpf);
+            const netoPago = cacheNeto - (costeGestion + costeSeguridadSocial + costeIrpf);
             const pendiente = Math.max(0, netoPago - importeEntregado);
             importePendienteInput.value = pendiente.toFixed(2);
         }
@@ -244,7 +351,24 @@ legend { font-weight: 700; padding: 0 8px; }
             }
 
             try {
-                const url = `{% url 'artists:calcular-costes' %}?cache_neto=${encodeURIComponent(valor)}`;
+                const tipoIrpf = (tipoIrpfInput?.value || "").trim().replace(",", ".");
+                const params = new URLSearchParams({ cache_neto: valor });
+                if (tipoIrpf) {
+                    params.set("tipo_irpf", tipoIrpf);
+                }
+                const artista = (artistaInput?.value || "").trim();
+                if (artista) {
+                    params.set("artista", artista);
+                }
+                const tipoRegistro = (tipoRegistroInput?.value || "").trim();
+                const agrupacion = (agrupacionInput?.value || "").trim();
+                if (tipoRegistro) {
+                    params.set("tipo_registro", tipoRegistro);
+                }
+                if (agrupacion) {
+                    params.set("agrupacion", agrupacion);
+                }
+                const url = `{% url 'artists:calcular-costes' %}?${params.toString()}`;
                 const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
                 const data = await response.json();
 
@@ -258,7 +382,40 @@ legend { font-weight: 700; padding: 0 8px; }
                 if (costeGestionInput) costeGestionInput.value = data.costes.coste_gestion;
                 if (costeSeguridadSocialInput) costeSeguridadSocialInput.value = data.costes.coste_seguridad_social;
                 if (costeIrpfInput) costeIrpfInput.value = data.costes.coste_irpf;
+
+                if (resumenIvaPct) resumenIvaPct.textContent = formatPercent(data.resumen.iva_porcentaje, 0);
+                if (resumenIvaImporte) resumenIvaImporte.textContent = formatMoney(data.resumen.iva_importe);
+                if (resumenTotalIva) resumenTotalIva.textContent = formatMoney(data.resumen.total_con_iva);
+                if (resumenIrpfPct) resumenIrpfPct.textContent = formatPercent(data.resumen.porcentaje_irpf, 2);
+                if (resumenHonorariosPct) resumenHonorariosPct.textContent = formatPercent(data.resumen.porcentaje_honorarios, 2);
+                if (resumenCantidad) resumenCantidad.textContent = data.resumen.cantidad_artistas;
+                detalleSsCache = data.resumen.detalle_ss || null;
+
+                if (detalleSsCache) {
+                    if (resumenCcEmpPct) resumenCcEmpPct.textContent = formatPercent(detalleSsCache.contingencias_comunes_empresa?.porcentaje, 2);
+                    if (resumenCcEmpImp) resumenCcEmpImp.textContent = formatMoney(detalleSsCache.contingencias_comunes_empresa?.importe);
+                    if (resumenCcTraPct) resumenCcTraPct.textContent = formatPercent(detalleSsCache.contingencias_comunes_trabajador?.porcentaje, 2);
+                    if (resumenCcTraImp) resumenCcTraImp.textContent = formatMoney(detalleSsCache.contingencias_comunes_trabajador?.importe);
+                    if (resumenMeiEmpPct) resumenMeiEmpPct.textContent = formatPercent(detalleSsCache.mei_empresa?.porcentaje, 2);
+                    if (resumenMeiEmpImp) resumenMeiEmpImp.textContent = formatMoney(detalleSsCache.mei_empresa?.importe);
+                    if (resumenMeiTraPct) resumenMeiTraPct.textContent = formatPercent(detalleSsCache.mei_trabajador?.porcentaje, 2);
+                    if (resumenMeiTraImp) resumenMeiTraImp.textContent = formatMoney(detalleSsCache.mei_trabajador?.importe);
+                    if (resumenDesEmpPct) resumenDesEmpPct.textContent = formatPercent(detalleSsCache.desempleo_empresa?.porcentaje, 2);
+                    if (resumenDesEmpImp) resumenDesEmpImp.textContent = formatMoney(detalleSsCache.desempleo_empresa?.importe);
+                    if (resumenDesTraPct) resumenDesTraPct.textContent = formatPercent(detalleSsCache.desempleo_trabajador?.porcentaje, 2);
+                    if (resumenDesTraImp) resumenDesTraImp.textContent = formatMoney(detalleSsCache.desempleo_trabajador?.importe);
+                    if (resumenForEmpPct) resumenForEmpPct.textContent = formatPercent(detalleSsCache.formacion_empresa?.porcentaje, 2);
+                    if (resumenForEmpImp) resumenForEmpImp.textContent = formatMoney(detalleSsCache.formacion_empresa?.importe);
+                    if (resumenForTraPct) resumenForTraPct.textContent = formatPercent(detalleSsCache.formacion_trabajador?.porcentaje, 2);
+                    if (resumenForTraImp) resumenForTraImp.textContent = formatMoney(detalleSsCache.formacion_trabajador?.importe);
+                    if (resumenAtEmpPct) resumenAtEmpPct.textContent = formatPercent(detalleSsCache.at_ep_empresa?.porcentaje, 2);
+                    if (resumenAtEmpImp) resumenAtEmpImp.textContent = formatMoney(detalleSsCache.at_ep_empresa?.importe);
+                    if (resumenFogasaPct) resumenFogasaPct.textContent = formatPercent(detalleSsCache.fogasa_empresa?.porcentaje, 2);
+                    if (resumenFogasaImp) resumenFogasaImp.textContent = formatMoney(detalleSsCache.fogasa_empresa?.importe);
+                }
+
                 actualizarPendiente();
+                actualizarResumenDesdeCampos();
 
                 setInfo(`Aplicado tramo ${data.tramo} (${data.rango}).`, false);
             } catch (_error) {
@@ -268,10 +425,26 @@ legend { font-weight: 700; padding: 0 8px; }
         }
 
         cacheNetoInput.addEventListener("blur", calcularCostes);
+        if (tipoIrpfInput) {
+            tipoIrpfInput.addEventListener("blur", calcularCostes);
+        }
+        if (artistaInput) {
+            artistaInput.addEventListener("change", calcularCostes);
+        }
+        if (tipoRegistroInput) {
+            tipoRegistroInput.addEventListener("change", calcularCostes);
+        }
+        if (agrupacionInput) {
+            agrupacionInput.addEventListener("change", calcularCostes);
+        }
         if (importeEntregadoInput) {
             importeEntregadoInput.addEventListener("input", actualizarPendiente);
         }
+        [cacheNetoInput, costeEmpresaInput, costeGestionInput, costeSeguridadSocialInput, costeIrpfInput, tipoIrpfInput].forEach((input) => {
+            input?.addEventListener("input", actualizarResumenDesdeCampos);
+        });
         actualizarPendiente();
+        actualizarResumenDesdeCampos();
     })();
 </script>
 {% endblock %}

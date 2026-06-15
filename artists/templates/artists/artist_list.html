@@ -48,6 +48,7 @@ th { background: #f9fafb; }
                         <th>Nombre</th>
                         <th>DNI/NIE</th>
                         <th>IRPF</th>
+                        <th>Honorario</th>
                         <th>Teléfono</th>
                         <th>Email</th>
                         <th>PRL</th>
@@ -64,6 +65,7 @@ th { background: #f9fafb; }
                         <td>{{ artist.nombre_completo }}</td>
                         <td>{{ artist.dni_nie }}</td>
                         <td>{{ artist.irpf }}%</td>
+                        <td>{% if artist.honorario is not None %}{{ artist.honorario }}%{% else %}-{% endif %}</td>
                         <td>{{ artist.telefono|default:"-" }}</td>
                         <td>{{ artist.email|default:"-" }}</td>
                         <td>{% if artist.prl %}Sí{% else %}No{% endif %}</td>
@@ -89,7 +91,7 @@ th { background: #f9fafb; }
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="11">No hay artistas todavía.</td></tr>
+                    <tr><td colspan="12">No hay artistas todavía.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

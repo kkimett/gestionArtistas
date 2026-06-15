@@ -17,6 +17,7 @@ class ArtistForm(forms.ModelForm):
         "nombre_completo",
         "dni_nie",
         "irpf",
+        "honorario",
         "telefono",
         "email",
         "prl",
@@ -31,6 +32,7 @@ class ArtistForm(forms.ModelForm):
             "nombre_completo",
             "dni_nie",
             "irpf",
+            "honorario",
             "telefono",
             "email",
             "prl",
@@ -88,6 +90,16 @@ class ArtistForm(forms.ModelForm):
         if remainder != 1:
             raise ValidationError("El IBAN no es válido.")
 
+        return value
+
+    def clean_honorario(self):
+        value = self.cleaned_data.get("honorario")
+        if value is None:
+            return value
+        if value < 0:
+            raise ValidationError("El honorario no puede ser negativo.")
+        if value > 100:
+            raise ValidationError("El honorario no puede ser mayor de 100%.")
         return value
 
     def save(self, commit=True):
@@ -154,6 +166,7 @@ class ArtistRecordForm(forms.ModelForm):
         # El navegador para input type=date usa YYYY-MM-DD.
         self.fields["fecha_alta"].input_formats = ["%Y-%m-%d"]
         self.fields["fecha_baja"].input_formats = ["%Y-%m-%d"]
+        self.fields["coste_empresa"].label = "Coste de la Empresa"
 
         # Se muestran como solo lectura, pero deben enviarse para validar correctamente.
         for field_name in (
@@ -174,8 +187,7 @@ class ArtistRecordForm(forms.ModelForm):
         estado_pago = cleaned_data.get("estado_pago")
         importe_entregado = cleaned_data.get("importe_entregado")
         neto_para_pago = (cleaned_data.get("cache_neto") or 0) - (
-            (cleaned_data.get("coste_empresa") or 0)
-            + (cleaned_data.get("coste_gestion") or 0)
+            (cleaned_data.get("coste_gestion") or 0)
             + (cleaned_data.get("coste_seguridad_social") or 0)
             + (cleaned_data.get("coste_irpf") or 0)
         )

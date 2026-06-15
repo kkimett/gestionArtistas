@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 
-from .models import Artist, ArtistRecord, Grouping, PriceBracket
+from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, PriceBracket
 
 
 @admin.register(Grouping)
@@ -41,10 +41,6 @@ class PriceBracketAdmin(admin.ModelAdmin):
         "rango_minimo",
         "rango_maximo",
         "importe_base",
-        "porcentaje_empresa",
-        "porcentaje_gestion",
-        "porcentaje_seguridad_social",
-        "porcentaje_irpf",
         "activo",
     )
     list_filter = ("activo", "numero_tramo")
@@ -53,15 +49,48 @@ class PriceBracketAdmin(admin.ModelAdmin):
             "fields": ("numero_tramo", "rango_minimo", "rango_maximo", "importe_base", "activo")
             ,"description": "En el tramo 1, el rango mínimo debe ser 0 y la base se calcula con el caché neto del registro."
         }),
-        ("Porcentajes de Costos", {
-            "fields": (
-                "porcentaje_empresa",
-                "porcentaje_gestion",
-                "porcentaje_seguridad_social",
-                "porcentaje_irpf",
-            )
+    )
+
+
+@admin.register(CostPercentageSettings)
+class CostPercentageSettingsAdmin(admin.ModelAdmin):
+    list_display = (
+        "porcentaje_honorarios",
+        "actualizado_en",
+    )
+    readonly_fields = ("actualizado_en",)
+    fieldsets = (
+        ("Contingencias comunes", {
+            "fields": ("contingencias_comunes_empresa", "contingencias_comunes_trabajador"),
+        }),
+        ("MEI", {
+            "fields": ("mei_empresa", "mei_trabajador"),
+        }),
+        ("Desempleo", {
+            "fields": ("desempleo_empresa", "desempleo_trabajador"),
+        }),
+        ("Formación", {
+            "fields": ("formacion_empresa", "formacion_trabajador"),
+        }),
+        ("AT y EP", {
+            "fields": ("at_ep_empresa",),
+        }),
+        ("Fondo de garantía salarial", {
+            "fields": ("fogasa_empresa",),
+        }),
+        ("Honorarios", {
+            "fields": ("porcentaje_honorarios",),
+        }),
+        ("Auditoría", {
+            "fields": ("actualizado_en",),
         }),
     )
+
+    def has_add_permission(self, request):
+        return not CostPercentageSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Artist)
@@ -70,6 +99,7 @@ class ArtistAdmin(admin.ModelAdmin):
         "nombre_completo",
         "dni_nie",
         "irpf",
+        "honorario",
         "telefono",
         "email",
         "prl",
@@ -90,7 +120,7 @@ class ArtistAdmin(admin.ModelAdmin):
     readonly_fields = ("creado_en", "actualizado_en")
     fieldsets = (
         ("Información Personal", {
-            "fields": ("nombre_completo", "dni_nie", "irpf", "telefono", "email", "prl")
+            "fields": ("nombre_completo", "dni_nie", "irpf", "honorario", "telefono", "email", "prl")
         }),
         ("Datos Bancarios", {
             "fields": ("cuenta_bancaria", "numero_seguridad_social")
