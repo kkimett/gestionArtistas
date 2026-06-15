@@ -187,7 +187,8 @@ class ArtistRecordForm(forms.ModelForm):
         estado_pago = cleaned_data.get("estado_pago")
         importe_entregado = cleaned_data.get("importe_entregado")
         neto_para_pago = (cleaned_data.get("cache_neto") or 0) - (
-            (cleaned_data.get("coste_gestion") or 0)
+            (cleaned_data.get("coste_empresa") or 0)
+            + (cleaned_data.get("coste_gestion") or 0)
             + (cleaned_data.get("coste_seguridad_social") or 0)
             + (cleaned_data.get("coste_irpf") or 0)
         )

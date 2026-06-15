@@ -55,17 +55,25 @@ class PriceBracket(models.Model):
         ).first()
 
     def calculate_costs(self, cache_net, irpf_percentage=None, honorarios_percentage=None):
-        """Calcula los costos según el tramo"""
-        # Para el tramo 1, la base es el cache_net
-        # Para otros tramos, se usa la base definida
-        base = cache_net if self.numero_tramo == 1 else (self.importe_base or cache_net)
+        """
+        Back-calculation desde Base Factura (cache_net) hasta Neto Líquido del artista.
+        Régimen especial de artistas por día de la Seguridad Social.
+
+        Paso 1: Comisión de gestión sobre Base Factura.
+        Paso 2: Presupuesto de nómina disponible = Base Factura - Comisión.
+        Paso 3: Retribución bruta estimada = Presupuesto / (1 + % empresa total).
+        Paso 4: Base de cotización según tramo (= bruto en tramo 1, fija en tramos 2-4).
+        Paso 5: SS empresa y Salario Bruto Real Final.
+        Paso 6: SS trabajador, Base IRPF, Retención IRPF y Neto Líquido.
+        """
         porcentajes = CostPercentageSettings.get_solo()
+
         porcentaje_honorarios_aplicado = (
-            honorarios_percentage
-            if honorarios_percentage is not None
+            honorarios_percentage if honorarios_percentage is not None
             else porcentajes.porcentaje_honorarios
         )
 
+        # --- Fuente 1: Porcentajes de cotización (CostPercentageSettings) ---
         porcentaje_empresa_total = (
             porcentajes.contingencias_comunes_empresa
             + porcentajes.mei_empresa
@@ -80,42 +88,74 @@ class PriceBracket(models.Model):
             + porcentajes.desempleo_trabajador
             + porcentajes.formacion_trabajador
         )
-        coste_empresa = base * (porcentaje_empresa_total / 100)
-        coste_seguridad_social = base * (porcentaje_trabajador_total / 100)
-        porcentaje_irpf_aplicado = irpf_percentage if irpf_percentage is not None else 0
-        # El IRPF se calcula sobre la base tras descontar la cotización del trabajador.
-        base_irpf = base - coste_seguridad_social
-        if base_irpf < 0:
-            base_irpf = 0
 
-        coste_gestion = base * (porcentaje_honorarios_aplicado / 100)
-        base_despues_honorarios = base - coste_gestion
-        if base_despues_honorarios < 0:
-            base_despues_honorarios = 0
+        # Paso 1: Comisión de gestión
+        coste_gestion = cache_net * (porcentaje_honorarios_aplicado / Decimal("100"))
+
+        # Paso 2: Presupuesto de nómina disponible
+        presupuesto_nomina = cache_net - coste_gestion
+
+        # Paso 3: Retribución bruta estimada (para ubicar el tramo correcto)
+        factor_empresa = Decimal("1") + porcentaje_empresa_total / Decimal("100")
+        bruto_estimado = presupuesto_nomina / factor_empresa
+
+        # --- Fuente 2: Tabla de Tramos (self / PriceBracket) ---
+        # Pasos 4 y 5: Base de cotización y Salario Bruto Real Final
+        if self.numero_tramo == 1:
+            # Tramo 1: la base de cotización es la propia retribución bruta estimada
+            base_cotizacion = bruto_estimado
+            salario_bruto = bruto_estimado
+        else:
+            # Tramos 2-4: base de cotización fija según tabla
+            base_cotizacion = self.importe_base or bruto_estimado
+            coste_ss_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
+            salario_bruto = presupuesto_nomina - coste_ss_empresa
+
+        coste_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
+
+        # Paso 6: Deducciones del trabajador, IRPF y Neto Líquido
+        coste_seguridad_social = base_cotizacion * (porcentaje_trabajador_total / Decimal("100"))
+
+        porcentaje_irpf_aplicado = irpf_percentage if irpf_percentage is not None else Decimal("0")
+        base_irpf = salario_bruto - coste_seguridad_social
+        if base_irpf < 0:
+            base_irpf = Decimal("0")
+
+        coste_irpf = base_irpf * (porcentaje_irpf_aplicado / Decimal("100"))
+
+        neto = salario_bruto - coste_seguridad_social - coste_irpf
+        if neto < 0:
+            neto = Decimal("0")
 
         return {
-            "coste_empresa": coste_empresa,
             "coste_gestion": coste_gestion,
+            "presupuesto_nomina": presupuesto_nomina,
+            "bruto_estimado": bruto_estimado,
+            "base_cotizacion": base_cotizacion,
+            "salario_bruto": salario_bruto,
+            "coste_empresa": coste_empresa,
             "coste_seguridad_social": coste_seguridad_social,
-            "coste_irpf": base_irpf * (porcentaje_irpf_aplicado / 100),
+            "base_irpf": base_irpf,
+            "coste_irpf": coste_irpf,
+            "neto": neto,
             "porcentaje_honorarios_aplicado": porcentaje_honorarios_aplicado,
-            "base_despues_honorarios": base_despues_honorarios,
-            "base_calculo": base,
+            "base_despues_honorarios": presupuesto_nomina,
+            "base_calculo": base_cotizacion,
         }
 
 
 class CostPercentageSettings(models.Model):
-    contingencias_comunes_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=15, verbose_name="Contingencias comunes empresa")
-    contingencias_comunes_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=5, verbose_name="Contingencias comunes trabajador")
-    mei_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="MEI empresa")
-    mei_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="MEI trabajador")
-    desempleo_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="Desempleo empresa")
-    desempleo_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="Desempleo trabajador")
-    formacion_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="Formación empresa")
-    formacion_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="Formación trabajador")
-    at_ep_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="AT y EP empresa")
-    fogasa_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=0, verbose_name="Fondo de garantía salarial empresa")
-    porcentaje_honorarios = models.DecimalField(max_digits=7, decimal_places=4, default=10, verbose_name="Honorarios")
+    contingencias_comunes_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("23.6"), verbose_name="Contingencias comunes empresa")
+    contingencias_comunes_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("4.7"), verbose_name="Contingencias comunes trabajador")
+    mei_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("0.75"), verbose_name="MEI empresa")
+    mei_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("0.15"), verbose_name="MEI trabajador")
+    desempleo_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("6"), verbose_name="Desempleo empresa")
+    desempleo_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("2"), verbose_name="Desempleo trabajador")
+    formacion_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("0.6"), verbose_name="Formación empresa")
+    formacion_trabajador = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("0.1"), verbose_name="Formación trabajador")
+    at_ep_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("1.5"), verbose_name="AT y EP empresa")
+    fogasa_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("3"), verbose_name="Fondo de garantía salarial empresa")
+    porcentaje_honorarios = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("5"), verbose_name="Honorarios")
     actualizado_en = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -198,12 +238,30 @@ class ArtistRecord(models.Model):
 
     def calculate_and_update_costs(self):
         """Calcula y actualiza automáticamente los costos según el tramo y cache_net"""
-        bracket = PriceBracket.get_bracket_for_amount(self.cache_neto)
-        if bracket:
-            honorario_artista = None
-            if self.artista_id and self.artista and self.artista.honorario is not None:
-                honorario_artista = self.artista.honorario
+        porcentajes = CostPercentageSettings.get_solo()
+        honorario_artista = None
+        if self.artista_id and self.artista and self.artista.honorario is not None:
+            honorario_artista = self.artista.honorario
 
+        # Calcular bruto estimado para determinar el tramo correcto (back-calculation)
+        porcentaje_honorarios_efectivo = (
+            honorario_artista if honorario_artista is not None else porcentajes.porcentaje_honorarios
+        )
+        porcentaje_empresa_total = (
+            porcentajes.contingencias_comunes_empresa
+            + porcentajes.mei_empresa
+            + porcentajes.desempleo_empresa
+            + porcentajes.formacion_empresa
+            + porcentajes.at_ep_empresa
+            + porcentajes.fogasa_empresa
+        )
+        factor_empresa = Decimal("1") + porcentaje_empresa_total / Decimal("100")
+        comision_previa = self.cache_neto * (porcentaje_honorarios_efectivo / Decimal("100"))
+        presupuesto_previo = self.cache_neto - comision_previa
+        bruto_estimado = presupuesto_previo / factor_empresa
+
+        bracket = PriceBracket.get_bracket_for_amount(bruto_estimado)
+        if bracket:
             costs = bracket.calculate_costs(
                 self.cache_neto,
                 irpf_percentage=self.tipo_irpf,
@@ -220,8 +278,8 @@ class ArtistRecord(models.Model):
 
     @property
     def neto_para_pago(self):
-        # El neto del artista no descuenta la cotización empresarial.
-        return self.cache_neto - (self.coste_gestion + self.coste_seguridad_social + self.coste_irpf)
+        # Neto = cache_neto - todos los costes (empresa, gestión, SS trabajador, IRPF)
+        return self.cache_neto - self.coste_total
 
     @property
     def importe_pendiente(self):

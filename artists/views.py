@@ -43,66 +43,81 @@ def calcular_costes_por_tramo(request):
         if porcentaje_irpf < 0:
             return JsonResponse({"ok": False, "error": "El tipo de IRPF no puede ser negativo."}, status=400)
 
-    tramo = PriceBracket.get_bracket_for_amount(importe_cache_neto)
-    if not tramo:
-        return JsonResponse({"ok": False, "error": "No existe un tramo activo para ese caché neto."}, status=404)
-
     porcentajes = CostPercentageSettings.get_solo()
     if artista_id:
         artista = Artist.objects.filter(pk=artista_id).first()
         if artista and artista.honorario is not None:
             honorario_artista = artista.honorario
 
+    # Back-calculation: estimar el bruto del artista para determinar el tramo correcto
+    porcentaje_honorarios_efectivo = (
+        honorario_artista if honorario_artista is not None else porcentajes.porcentaje_honorarios
+    )
+    porcentaje_empresa_total_previo = (
+        porcentajes.contingencias_comunes_empresa
+        + porcentajes.mei_empresa
+        + porcentajes.desempleo_empresa
+        + porcentajes.formacion_empresa
+        + porcentajes.at_ep_empresa
+        + porcentajes.fogasa_empresa
+    )
+    factor_empresa = Decimal("1") + porcentaje_empresa_total_previo / Decimal("100")
+    comision_previa = importe_cache_neto * (porcentaje_honorarios_efectivo / Decimal("100"))
+    presupuesto_previo = importe_cache_neto - comision_previa
+    bruto_estimado = presupuesto_previo / factor_empresa
+
+    tramo = PriceBracket.get_bracket_for_amount(bruto_estimado)
+    if not tramo:
+        return JsonResponse({"ok": False, "error": "No existe un tramo activo para esa retribución estimada."}, status=404)
+
     costes = tramo.calculate_costs(
         importe_cache_neto,
         irpf_percentage=porcentaje_irpf,
         honorarios_percentage=honorario_artista,
     )
-    base_calculo = costes.get("base_calculo") or (
-        importe_cache_neto if tramo.numero_tramo == 1 else (tramo.importe_base or importe_cache_neto)
-    )
-    base_despues_honorarios = costes.get("base_despues_honorarios", base_calculo)
+    base_cotizacion = costes["base_cotizacion"]
+    salario_bruto = costes["salario_bruto"]
 
     detalle_ss = {
         "contingencias_comunes_empresa": {
             "porcentaje": porcentajes.contingencias_comunes_empresa,
-            "importe": base_calculo * (porcentajes.contingencias_comunes_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.contingencias_comunes_empresa / Decimal("100")),
         },
         "contingencias_comunes_trabajador": {
             "porcentaje": porcentajes.contingencias_comunes_trabajador,
-            "importe": base_calculo * (porcentajes.contingencias_comunes_trabajador / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.contingencias_comunes_trabajador / Decimal("100")),
         },
         "mei_empresa": {
             "porcentaje": porcentajes.mei_empresa,
-            "importe": base_calculo * (porcentajes.mei_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.mei_empresa / Decimal("100")),
         },
         "mei_trabajador": {
             "porcentaje": porcentajes.mei_trabajador,
-            "importe": base_calculo * (porcentajes.mei_trabajador / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.mei_trabajador / Decimal("100")),
         },
         "desempleo_empresa": {
             "porcentaje": porcentajes.desempleo_empresa,
-            "importe": base_calculo * (porcentajes.desempleo_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.desempleo_empresa / Decimal("100")),
         },
         "desempleo_trabajador": {
             "porcentaje": porcentajes.desempleo_trabajador,
-            "importe": base_calculo * (porcentajes.desempleo_trabajador / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.desempleo_trabajador / Decimal("100")),
         },
         "formacion_empresa": {
             "porcentaje": porcentajes.formacion_empresa,
-            "importe": base_calculo * (porcentajes.formacion_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.formacion_empresa / Decimal("100")),
         },
         "formacion_trabajador": {
             "porcentaje": porcentajes.formacion_trabajador,
-            "importe": base_calculo * (porcentajes.formacion_trabajador / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.formacion_trabajador / Decimal("100")),
         },
         "at_ep_empresa": {
             "porcentaje": porcentajes.at_ep_empresa,
-            "importe": base_calculo * (porcentajes.at_ep_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.at_ep_empresa / Decimal("100")),
         },
         "fogasa_empresa": {
             "porcentaje": porcentajes.fogasa_empresa,
-            "importe": base_calculo * (porcentajes.fogasa_empresa / Decimal("100")),
+            "importe": base_cotizacion * (porcentajes.fogasa_empresa / Decimal("100")),
         },
     }
 
@@ -130,13 +145,7 @@ def calcular_costes_por_tramo(request):
         except Exception:
             cantidad_artistas = Decimal("1")
 
-    neto_por_artista = importe_cache_neto - (
-        costes["coste_gestion"]
-        + costes["coste_seguridad_social"]
-        + costes["coste_irpf"]
-    )
-    if neto_por_artista < 0:
-        neto_por_artista = Decimal("0")
+    neto_por_artista = costes["neto"]
 
     iva_porcentaje = Decimal("21")
     iva_importe = (importe_cache_neto * iva_porcentaje) / Decimal("100")
@@ -154,7 +163,12 @@ def calcular_costes_por_tramo(request):
                 "porcentaje_ss_total": f"{porcentaje_ss_total:.4f}",
                 "porcentaje_irpf": f"{(porcentaje_irpf or Decimal('0')):.4f}",
                 "porcentaje_honorarios": f"{costes['porcentaje_honorarios_aplicado']:.4f}",
-                "base_despues_honorarios": f"{base_despues_honorarios:.2f}",
+                "presupuesto_nomina": f"{costes['presupuesto_nomina']:.2f}",
+                "coste_ss_empresa": f"{costes['coste_empresa']:.2f}",
+                "salario_bruto": f"{salario_bruto:.2f}",
+                "base_cotizacion": f"{base_cotizacion:.2f}",
+                "coste_ss_trabajador": f"{costes['coste_seguridad_social']:.2f}",
+                "base_irpf": f"{costes['base_irpf']:.2f}",
                 "detalle_ss": {
                     key: {
                         "porcentaje": f"{value['porcentaje']:.4f}",
