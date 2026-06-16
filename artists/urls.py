@@ -11,8 +11,15 @@ from .views import (
     ArtistUpdateView,
     GroupingCreateView,
     GroupingListView,
+    GroupingRecordBatchUpdateView,
+    GroupingRecordBatchCreateView,
+    GroupingRecordListView,
     GroupingUpdateView,
+    CalculatorView,
+    agrupacion_artistas,
     artist_bulk_upload_view,
+    calcular_costes_agrupacion,
+    calcular_costes_desde_neto,
     calcular_costes_por_tramo,
 )
 
@@ -20,9 +27,16 @@ app_name = "artists"
 
 urlpatterns = [
     path("", ArtistListView.as_view(), name="list"),
+    path("calculadora/", CalculatorView.as_view(), name="calculator"),
     path("registros/", ArtistRecordListView.as_view(), name="record-list"),
+    path("registros/agrupaciones/", GroupingRecordListView.as_view(), name="record-grouping-list"),
+    path("registros/agrupaciones/<int:pk>/edit/", GroupingRecordBatchUpdateView.as_view(), name="record-grouping-update"),
     path("api/calcular-costes/", calcular_costes_por_tramo, name="calcular-costes"),
+    path("api/calcular-costes-desde-neto/", calcular_costes_desde_neto, name="calcular-costes-desde-neto"),
+    path("api/calcular-costes-agrupacion/", calcular_costes_agrupacion, name="calcular-costes-agrupacion"),
+    path("api/agrupacion-artistas/", agrupacion_artistas, name="agrupacion-artistas"),
     path("agrupaciones/", GroupingListView.as_view(), name="grouping-list"),
+    path("agrupaciones/registros/nuevo/", GroupingRecordBatchCreateView.as_view(), name="grouping-record-create"),
     path("agrupaciones/nueva/", GroupingCreateView.as_view(), name="grouping-create"),
     path("agrupaciones/<int:pk>/editar/", GroupingUpdateView.as_view(), name="grouping-update"),
     path("new/", ArtistCreateView.as_view(), name="create"),

@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Calculadora{% endblock %}
+
+{% block extra_css %}
+.layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.panel-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 700; font-size: 13px; }
+.actions { display: flex; gap: 10px; margin-top: 14px; }
+.hint { font-size: 12px; color: #6b7280; }
+.info { margin-top: 8px; font-size: 13px; color: #1f2937; }
+.info.error { color: #b91c1c; }
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.kpi { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #f8fafc; }
+.kpi .label { font-size: 12px; color: #6b7280; }
+.kpi .value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+@media (max-width: 980px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    .summary { grid-template-columns: 1fr; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="panel-box">
+    <h1 style="margin-top: 0;">Calculadora</h1>
+    <p class="hint">Formulario independiente para calcular costes con la misma lógica que usa el sistema de registros.</p>
+
+    <div class="grid-2">
+        <div class="field">
+            <label for="calc-irpf">IRPF (%)</label>
+            <input id="calc-irpf" type="number" min="0" step="0.01" placeholder="15.00">
+        </div>
+        <div class="field">
+            <label for="calc-cache">Caché neto</label>
+            <input id="calc-cache" type="number" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+            <label for="calc-num-dias">Número de días</label>
+            <input id="calc-num-dias" type="number" min="1" step="1" placeholder="1" value="1">
+        </div>
+        <div class="field">
+            <label for="calc-n-artistas">Número de artistas</label>
+            <input id="calc-n-artistas" type="number" min="1" step="1" placeholder="1" value="1">
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="button" type="button" id="calc-btn">Calcular</button>
+    </div>
+
+    <div id="calc-info" class="info">Completa el caché neto y pulsa Calcular.</div>
+
+    <div class="summary">
+        <div class="kpi"><div class="label">Tramo</div><div class="value" id="out-tramo">-</div></div>
+        <div class="kpi"><div class="label">Importe Bruto</div><div class="value" id="out-bruto">0,00€</div></div>
+        <div class="kpi"><div class="label">Total con IVA</div><div class="value" id="out-total-iva">0,00€</div></div>
+        <div class="kpi"><div class="label">Honorarios</div><div class="value" id="out-honorarios">0,00€</div></div>
+        <div class="kpi"><div class="label">SS Total (empresa + trabajador)</div><div class="value" id="out-ss-total">0,00€</div></div>
+        <div class="kpi"><div class="label">SS Trabajador</div><div class="value" id="out-ss-trab">0,00€</div></div>
+        <div class="kpi"><div class="label">IRPF</div><div class="value" id="out-irpf">0,00€</div></div>
+        <div class="kpi"><div class="label">Neto por artista</div><div class="value" id="out-neto-artista">0,00€</div></div>
+        <div class="kpi"><div class="label">Neto total</div><div class="value" id="out-neto-total">0,00€</div></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const irpfInput = document.getElementById("calc-irpf");
+        const cacheInput = document.getElementById("calc-cache");
+        const numDiasInput = document.getElementById("calc-num-dias");
+        const nArtistasInput = document.getElementById("calc-n-artistas");
+        const calcBtn = document.getElementById("calc-btn");
+        const info = document.getElementById("calc-info");
+
+        const outTramo = document.getElementById("out-tramo");
+        const outBruto = document.getElementById("out-bruto");
+        const outTotalIva = document.getElementById("out-total-iva");
+        const outHonorarios = document.getElementById("out-honorarios");
+        const outSsTotal = document.getElementById("out-ss-total");
+        const outSsTrab = document.getElementById("out-ss-trab");
+        const outIrpf = document.getElementById("out-irpf");
+        const outNetoArtista = document.getElementById("out-neto-artista");
+        const outNetoTotal = document.getElementById("out-neto-total");
+
+        function toNumber(value) {
+            const parsed = parseFloat((value || "0").toString().replace(",", "."));
+            return Number.isFinite(parsed) ? parsed : 0;
+        }
+
+        function formatMoney(value) {
+            const number = toNumber(value);
+            return number.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "€";
+        }
+
+        function setInfo(message, isError) {
+            info.textContent = message || "";
+            info.classList.toggle("error", Boolean(isError));
+        }
+
+        if (!calcBtn) return;
+
+        calcBtn.addEventListener("click", async function () {
+            const cacheNeto = (cacheInput.value || "").trim();
+            if (!cacheNeto) {
+                setInfo("Debes indicar un caché neto.", true);
+                return;
+            }
+
+            const params = new URLSearchParams();
+            params.set("cache_neto", cacheNeto);
+            params.set("contexto", "registro");
+
+            const irpf = (irpfInput.value || "").trim();
+            const numDias = (numDiasInput.value || "1").trim();
+
+            if (irpf) params.set("tipo_irpf", irpf);
+            if (numDias) params.set("num_dias", numDias);
+
+            try {
+                const response = await fetch("{% url 'artists:calcular-costes' %}?" + params.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    setInfo(data.error || "No se pudieron calcular los costes.", true);
+                    return;
+                }
+
+                outTramo.textContent = data.tramo || "-";
+                outBruto.textContent = formatMoney(data.resumen.importe_bruto);
+                outTotalIva.textContent = formatMoney(data.resumen.total_con_iva);
+                outHonorarios.textContent = formatMoney(data.costes.coste_gestion);
+                outSsTotal.textContent = formatMoney(data.resumen.coste_ss_total);
+                outSsTrab.textContent = formatMoney(data.costes.coste_seguridad_social);
+                outIrpf.textContent = formatMoney(data.costes.coste_irpf);
+                const nArtistasVal = Math.max(1, parseInt(nArtistasInput.value || "1", 10));
+                const netoArtista = toNumber(data.resumen.neto_por_artista);
+                outNetoArtista.textContent = formatMoney(netoArtista);
+                outNetoTotal.textContent = formatMoney(netoArtista * nArtistasVal);
+
+                setInfo("Cálculo actualizado con la misma lógica de registros.", false);
+            } catch (_error) {
+                setInfo("Error de conexión al calcular costes.", true);
+            }
+        });
+    })();
+</script>
+{% endblock %}

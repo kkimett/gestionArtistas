@@ -1,0 +1,466 @@
+{% extends "base.html" %}
+
+{% block title %}Registros de agrupaciones{% endblock %}
+
+{% block extra_css %}
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.panel-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 16px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 700; font-size: 13px; }
+.table-wrap { overflow-x: auto; margin-top: 10px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 13px; }
+th { background: #f9fafb; }
+.line-builder { display: grid; grid-template-columns: 1.2fr .6fr auto; gap: 10px; align-items: end; margin-top: 12px; }
+.pill-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #111827; background: #111827; color: #fff; cursor: pointer; }
+.row-actions { display: flex; gap: 8px; align-items: center; }
+.remove-btn { border: 1px solid #b91c1c; background: #fff; color: #b91c1c; border-radius: 8px; padding: 6px 9px; cursor: pointer; }
+.inline-cache { width: 120px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+.inline-destino { width: 180px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+.inline-flag { width: auto; }
+.summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.kpi { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background: #f8fafc; }
+.kpi .label { font-size: 12px; color: #6b7280; }
+.kpi .value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+.actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+.hint { font-size: 12px; color: #6b7280; }
+.errors, .errorlist { color: #b91c1c; }
+@media (max-width: 980px) {
+    .layout { grid-template-columns: 1fr; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .summary { grid-template-columns: 1fr; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div>
+        <h1>{% if form_mode == "edit" %}Editar registros de agrupación{% else %}Registros de agrupaciones{% endif %}</h1>
+        <p class="meta">{% if form_mode == "edit" %}Formulario masivo rellenado para revisar y actualizar la agrupación.{% else %}Genera registros en bloque por agrupación sin tocar el formulario individual.{% endif %}</p>
+    </div>
+    <div class="header-actions">
+        <a class="button secondary" href="{% if form_mode == "edit" %}{% url 'artists:record-grouping-list' %}{% else %}{% url 'artists:record-list' %}{% endif %}">Volver</a>
+    </div>
+</div>
+
+<form method="post" class="layout">
+    {% csrf_token %}
+
+    <div class="panel-box">
+        {% if form.non_field_errors %}
+            <div class="errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <div class="field">
+            {{ form.agrupacion.label_tag }}
+            {{ form.agrupacion }}
+            {{ form.agrupacion.errors }}
+            <div class="hint">Al elegir agrupación se marcan automáticamente sus componentes.</div>
+        </div>
+
+        {{ form.lineas }}
+        {{ form.lineas.errors }}
+
+        <div class="line-builder">
+            <div class="field">
+                <label for="line-artist">Añadir artista</label>
+                <select id="line-artist">
+                    <option value="">Selecciona artista</option>
+                    {% for artist in artists_catalog %}
+                    <option value="{{ artist.id }}">{{ artist.nombre_completo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="line-cache">Caché neto</label>
+                <input id="line-cache" type="number" min="0.01" step="0.01" placeholder="0,00">
+            </div>
+            <div class="field">
+                <button class="pill-btn" type="button" id="add-line-btn">Añadir línea</button>
+            </div>
+        </div>
+
+        <div class="table-wrap" style="margin-top: 14px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Artista</th>
+                        <th>Caché neto</th>
+                        <th>Autónomo</th>
+                        <th>Solicitud A1</th>
+                        <th>Destino A1</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="lineas-body">
+                    <tr><td colspan="6">No hay artistas añadidos.</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="hint">Puedes cargar los artistas de la agrupación y ajustar añadiendo o quitando líneas una a una.</div>
+
+        <div class="grid-2" style="margin-top: 12px;">
+            <div class="field">
+                {{ form.fecha_alta.label_tag }}
+                {{ form.fecha_alta }}
+                {{ form.fecha_alta.errors }}
+            </div>
+            <div class="field">
+                {{ form.fecha_baja.label_tag }}
+                {{ form.fecha_baja }}
+                {{ form.fecha_baja.errors }}
+            </div>
+            <div class="field">
+                {{ form.estado_pago.label_tag }}
+                {{ form.estado_pago }}
+                {{ form.estado_pago.errors }}
+            </div>
+            <div class="field">
+                {{ form.proceso_cancelado.label_tag }}
+                <div>{{ form.proceso_cancelado }}</div>
+                {{ form.proceso_cancelado.errors }}
+            </div>
+        </div>
+
+        <div class="field" style="margin-top: 12px;">
+            {{ form.observaciones.label_tag }}
+            {{ form.observaciones }}
+            {{ form.observaciones.errors }}
+        </div>
+
+        <div class="actions">
+            <button class="button secondary" type="button" id="calcular-btn">Calcular costes</button>
+            <button class="button" type="submit">{% if form_mode == "edit" %}Guardar cambios{% else %}Generar registros{% endif %}</button>
+        </div>
+    </div>
+
+    <div class="panel-box">
+        <h3 style="margin-top: 0;">Vista previa de costes</h3>
+        <p class="hint" id="preview-info">Añade líneas de artista con caché y pulsa Calcular costes.</p>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Artista</th>
+                        <th>Caché</th>
+                        <th>Tramo</th>
+                        <th>IRPF</th>
+                        <th>Honorario</th>
+                        <th>Empresa</th>
+                        <th>Gestión</th>
+                        <th>SS</th>
+                        <th>IRPF</th>
+                        <th>Neto</th>
+                    </tr>
+                </thead>
+                <tbody id="preview-body">
+                    <tr><td colspan="10">Sin cálculo todavía.</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="summary">
+            <div class="kpi"><div class="label">Importe Bruto</div><div class="value" id="total-bruto">0,00€</div></div>
+            <div class="kpi"><div class="label">Total empresa</div><div class="value" id="total-empresa">0,00€</div></div>
+            <div class="kpi"><div class="label">Total gestión</div><div class="value" id="total-gestion">0,00€</div></div>
+            <div class="kpi"><div class="label">Total SS trabajador</div><div class="value" id="total-ss">0,00€</div></div>
+            <div class="kpi"><div class="label">Total IRPF</div><div class="value" id="total-irpf">0,00€</div></div>
+            <div class="kpi"><div class="label">Neto total</div><div class="value" id="total-neto">0,00€</div></div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const agrupacionInput = document.getElementById("id_agrupacion");
+        const lineasInput = document.getElementById("id_lineas");
+        const lineasBody = document.getElementById("lineas-body");
+        const lineArtistInput = document.getElementById("line-artist");
+        const lineCacheInput = document.getElementById("line-cache");
+        const addLineBtn = document.getElementById("add-line-btn");
+        const fechaAltaInput = document.getElementById("id_fecha_alta");
+        const fechaBajaInput = document.getElementById("id_fecha_baja");
+
+        const calcularBtn = document.getElementById("calcular-btn");
+        const previewBody = document.getElementById("preview-body");
+        const previewInfo = document.getElementById("preview-info");
+
+        const totalBruto = document.getElementById("total-bruto");
+        const totalEmpresa = document.getElementById("total-empresa");
+        const totalGestion = document.getElementById("total-gestion");
+        const totalSs = document.getElementById("total-ss");
+        const totalIrpf = document.getElementById("total-irpf");
+        const totalNeto = document.getElementById("total-neto");
+
+        const artistNameMap = new Map(Array.from(lineArtistInput.options)
+            .filter((option) => option.value)
+            .map((option) => [option.value, option.textContent]));
+
+        let lineas = [];
+
+        function toDecimalText(value) {
+            const number = parseFloat((value || "").toString().replace(",", "."));
+            if (!Number.isFinite(number)) return "";
+            return number.toFixed(2);
+        }
+
+        function syncLineas() {
+            lineasInput.value = JSON.stringify(lineas);
+        }
+
+        function renderLineas() {
+            if (!lineas.length) {
+                lineasBody.innerHTML = "<tr><td colspan=\"6\">No hay artistas añadidos.</td></tr>";
+                syncLineas();
+                return;
+            }
+
+            lineasBody.innerHTML = lineas.map((linea, index) => (
+                "<tr>" +
+                    "<td>" + (artistNameMap.get(linea.artista_id) || "Artista") + "</td>" +
+                    "<td><input class=\"inline-cache\" type=\"number\" min=\"0.01\" step=\"0.01\" value=\"" + (linea.cache_neto || "") + "\" data-index=\"" + index + "\" aria-label=\"Cache neto\"></td>" +
+                    "<td><input class=\"inline-flag\" type=\"checkbox\" " + (linea.es_autonomo ? "checked" : "") + " data-index=\"" + index + "\" data-field=\"es_autonomo\" aria-label=\"Autónomo\"></td>" +
+                    "<td><input class=\"inline-flag\" type=\"checkbox\" " + (linea.solicitud_a1 ? "checked" : "") + " data-index=\"" + index + "\" data-field=\"solicitud_a1\" aria-label=\"Solicitud A1\"></td>" +
+                    "<td><input class=\"inline-destino\" type=\"text\" value=\"" + (linea.destino_a1 || "") + "\" data-index=\"" + index + "\" data-field=\"destino_a1\" aria-label=\"Destino A1\" " + (linea.solicitud_a1 ? "" : "disabled") + "></td>" +
+                    "<td><button type=\"button\" class=\"remove-btn\" data-index=\"" + index + "\">Quitar</button></td>" +
+                "</tr>"
+            )).join("");
+
+            syncLineas();
+        }
+
+        function addLinea(artistId, cacheNeto) {
+            if (!artistId) {
+                previewInfo.textContent = "Selecciona un artista.";
+                return;
+            }
+            if (lineas.some((linea) => linea.artista_id === artistId)) {
+                previewInfo.textContent = "Ese artista ya está añadido.";
+                return;
+            }
+
+            const cache = toDecimalText(cacheNeto);
+            if (!cache || parseFloat(cache) <= 0) {
+                previewInfo.textContent = "Indica un caché neto válido para la línea.";
+                return;
+            }
+
+            lineas.push({
+                artista_id: artistId,
+                cache_neto: cache,
+                es_autonomo: false,
+                solicitud_a1: false,
+                destino_a1: "",
+            });
+            renderLineas();
+            previewInfo.textContent = "Línea añadida.";
+        }
+
+        function formatMoney(value) {
+            const number = parseFloat((value || "0").toString().replace(",", "."));
+            if (!Number.isFinite(number)) return "0,00€";
+            return number.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "€";
+        }
+
+        function hasValidPrefilledCaches() {
+            return lineas.length > 0 && lineas.every((linea) => {
+                const cache = toDecimalText(linea.cache_neto);
+                return cache && parseFloat(cache) > 0;
+            });
+        }
+
+        async function preselectGroupingArtists() {
+            const groupingId = agrupacionInput.value;
+            if (!groupingId) return;
+
+            try {
+                const params = new URLSearchParams({ agrupacion: groupingId });
+                const response = await fetch("{% url 'artists:agrupacion-artistas' %}?" + params.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    previewInfo.textContent = data.error || "No se pudieron cargar los artistas de la agrupación.";
+                    return;
+                }
+
+                lineas = (data.artistas || []).map((artist) => ({
+                    artista_id: artist.id,
+                    cache_neto: "",
+                    es_autonomo: false,
+                    solicitud_a1: false,
+                    destino_a1: "",
+                }));
+                renderLineas();
+                previewInfo.textContent = "Componentes cargados. Define el caché de cada artista o ajusta líneas manualmente.";
+            } catch (_error) {
+                previewInfo.textContent = "No se pudieron cargar los artistas de la agrupación.";
+            }
+        }
+
+        async function calcular() {
+            if (!lineas.length) {
+                previewInfo.textContent = "Añade al menos una línea de artista.";
+                return;
+            }
+
+            const lineasValidas = [];
+            for (let i = 0; i < lineas.length; i += 1) {
+                const linea = lineas[i];
+                const cache = toDecimalText(linea.cache_neto);
+                if (!cache || parseFloat(cache) <= 0) {
+                    previewInfo.textContent = "Hay líneas sin caché válido. Revisa antes de calcular.";
+                    return;
+                }
+                const solicitudA1 = Boolean(linea.solicitud_a1);
+                const destinoA1 = (linea.destino_a1 || "").trim();
+                if (solicitudA1 && !destinoA1) {
+                    previewInfo.textContent = "Hay líneas con Solicitud A1 marcada sin destino.";
+                    return;
+                }
+                lineasValidas.push({
+                    artista_id: linea.artista_id,
+                    cache_neto: cache,
+                    es_autonomo: Boolean(linea.es_autonomo),
+                    solicitud_a1: solicitudA1,
+                    destino_a1: solicitudA1 ? destinoA1 : "",
+                });
+            }
+            lineas = lineasValidas;
+            renderLineas();
+
+            const params = new URLSearchParams();
+            params.set("lineas", JSON.stringify(lineas));
+            const fechaAlta = (fechaAltaInput?.value || "").trim();
+            const fechaBaja = (fechaBajaInput?.value || "").trim();
+            if (fechaAlta) {
+                params.set("fecha_alta", fechaAlta);
+            }
+            if (fechaBaja) {
+                params.set("fecha_baja", fechaBaja);
+            }
+
+            try {
+                const response = await fetch("{% url 'artists:calcular-costes-agrupacion' %}?" + params.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json();
+                if (!response.ok || !data.ok) {
+                    previewInfo.textContent = data.error || "No se pudo calcular el desglose.";
+                    return;
+                }
+
+                previewInfo.textContent = "Cálculo actualizado para " + data.items.length + " artistas.";
+                previewBody.innerHTML = data.items.map((item) => (
+                    "<tr>" +
+                        "<td>" + item.nombre + "</td>" +
+                        "<td>" + formatMoney(item.cache_neto) + "</td>" +
+                        "<td>" + item.tramo + "</td>" +
+                        "<td>" + parseFloat(item.irpf).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%</td>" +
+                        "<td>" + parseFloat(item.honorario).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%</td>" +
+                        "<td>" + formatMoney(item.coste_empresa) + "</td>" +
+                        "<td>" + formatMoney(item.coste_gestion) + "</td>" +
+                        "<td>" + formatMoney(item.coste_ss) + "</td>" +
+                        "<td>" + formatMoney(item.coste_irpf) + "</td>" +
+                        "<td>" + formatMoney(item.neto) + "</td>" +
+                    "</tr>"
+                )).join("");
+
+                totalBruto.textContent = formatMoney(data.totales.bruto || "0");
+                totalEmpresa.textContent = formatMoney(data.totales.empresa);
+                totalGestion.textContent = formatMoney(data.totales.gestion);
+                totalSs.textContent = formatMoney(data.totales.ss);
+                totalIrpf.textContent = formatMoney(data.totales.irpf);
+                totalNeto.textContent = formatMoney(data.totales.neto);
+            } catch (_error) {
+                previewInfo.textContent = "No se pudo conectar con el cálculo de agrupaciones.";
+            }
+        }
+
+        if (addLineBtn) {
+            addLineBtn.addEventListener("click", function () {
+                addLinea(lineArtistInput.value, lineCacheInput.value);
+                lineCacheInput.value = "";
+            });
+        }
+        if (lineasBody) {
+            lineasBody.addEventListener("click", function (event) {
+                const button = event.target.closest(".remove-btn");
+                if (!button) return;
+                const index = parseInt(button.getAttribute("data-index"), 10);
+                if (!Number.isInteger(index)) return;
+                lineas.splice(index, 1);
+                renderLineas();
+            });
+            lineasBody.addEventListener("input", function (event) {
+                const input = event.target.closest(".inline-cache");
+                const destino = event.target.closest(".inline-destino");
+                if (!input && !destino) return;
+                const element = input || destino;
+                const field = element.getAttribute("data-field") || "cache_neto";
+                const index = parseInt(element.getAttribute("data-index"), 10);
+                if (!Number.isInteger(index) || !lineas[index]) return;
+                if (field === "cache_neto") {
+                    lineas[index].cache_neto = element.value;
+                } else if (field === "destino_a1") {
+                    lineas[index].destino_a1 = element.value;
+                }
+                syncLineas();
+            });
+            lineasBody.addEventListener("change", function (event) {
+                const checkbox = event.target.closest(".inline-flag");
+                if (!checkbox) return;
+                const index = parseInt(checkbox.getAttribute("data-index"), 10);
+                if (!Number.isInteger(index) || !lineas[index]) return;
+                const field = checkbox.getAttribute("data-field");
+                if (!field) return;
+                lineas[index][field] = checkbox.checked;
+                if (field === "solicitud_a1") {
+                    if (!checkbox.checked) {
+                        lineas[index].destino_a1 = "";
+                    }
+                    renderLineas();
+                    return;
+                }
+                syncLineas();
+            });
+            lineasBody.addEventListener("blur", function (event) {
+                const input = event.target.closest(".inline-cache");
+                if (!input) return;
+                const index = parseInt(input.getAttribute("data-index"), 10);
+                if (!Number.isInteger(index) || !lineas[index]) return;
+                const normalized = toDecimalText(input.value);
+                lineas[index].cache_neto = normalized;
+                input.value = normalized;
+                syncLineas();
+            }, true);
+        }
+        if (agrupacionInput) agrupacionInput.addEventListener("change", preselectGroupingArtists);
+        if (calcularBtn) calcularBtn.addEventListener("click", calcular);
+
+        try {
+            lineas = JSON.parse(lineasInput.value || "[]");
+            if (!Array.isArray(lineas)) lineas = [];
+            lineas = lineas.map((linea) => ({
+                artista_id: String(linea.artista_id || ""),
+                cache_neto: linea.cache_neto || "",
+                es_autonomo: Boolean(linea.es_autonomo),
+                solicitud_a1: Boolean(linea.solicitud_a1),
+                destino_a1: linea.destino_a1 || "",
+            })).filter((linea) => linea.artista_id);
+        } catch (_error) {
+            lineas = [];
+        }
+        renderLineas();
+        if (hasValidPrefilledCaches()) {
+            calcular();
+        }
+    })();
+</script>
+{% endblock %}

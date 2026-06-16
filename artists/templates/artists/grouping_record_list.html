@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Registros por agrupación{% endblock %}
+
+{% block extra_css %}
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.table-wrap { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 12px 10px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
+th { background: #f9fafb; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.artist-list { margin: 0; padding-left: 18px; }
+.meta-block { display: grid; gap: 4px; }
+@media (max-width: 900px) {
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tbody { display: grid; gap: 14px; padding: 14px; }
+    tr { border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div>
+        <h1>Registros por agrupación</h1>
+        <p class="meta">Vista de agrupaciones para abrir el formulario masivo ya rellenado.</p>
+    </div>
+    <div class="header-actions">
+        <a class="button secondary" href="{% url 'artists:record-list' %}">Volver a registros</a>
+        <a class="button" href="{% url 'artists:grouping-record-create' %}">Nueva carga por agrupación</a>
+    </div>
+</div>
+
+{% if groupings %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                <th>Agrupación</th>
+                <th>Artistas</th>
+                <th>Registros activos</th>
+                <th>Última alta</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for grouping in groupings %}
+            <tr>
+                <td>
+                    <div class="meta-block">
+                        <strong>{{ grouping.nombre }}</strong>
+                        {% if grouping.descripcion %}
+                        <span class="meta">{{ grouping.descripcion }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td>
+                    {% if grouping.total_artistas %}
+                    <ul class="artist-list">
+                        {% for artist in grouping.artistas.all %}
+                        <li>{{ artist.nombre_completo }}</li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <span class="meta">Sin artistas</span>
+                    {% endif %}
+                </td>
+                <td>{{ grouping.total_registros }}</td>
+                <td>{{ grouping.ultima_alta|default:"-" }}</td>
+                <td>
+                    <div class="actions">
+                        <a class="button secondary" href="{% url 'artists:record-grouping-update' grouping.pk %}">Editar</a>
+                        <a class="button secondary" href="{% url 'artists:grouping-record-create' %}?agrupacion={{ grouping.pk }}">Nuevo desde agrupación</a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="meta">No hay agrupaciones disponibles.</p>
+{% endif %}
+{% endblock %}

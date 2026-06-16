@@ -167,7 +167,7 @@ class ArtistRecordAdmin(admin.ModelAdmin):
             "fields": ("artista", "tipo_registro", "agrupacion")
         }),
         ("Configuración Tributaria", {
-            "fields": ("es_autonomo", "tipo_irpf", "solicitud_a1")
+            "fields": ("es_autonomo", "tipo_irpf", "solicitud_a1", "destino_a1")
         }),
         ("Altas y Bajas", {
             "fields": ("fecha_alta", "fecha_baja", "proceso_cancelado")

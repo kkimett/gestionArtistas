@@ -54,12 +54,29 @@ class PriceBracket(models.Model):
             rango_maximo__gte=amount
         ).first()
 
-    def calculate_costs(self, cache_net, irpf_percentage=None, honorarios_percentage=None):
+    @classmethod
+    def get_bracket_for_calculator(cls, base_imponible, num_days=1, n_artistas=1, porcentaje_empresa_total=Decimal("0")):
+        """Replica la lógica PHP para determinar el tramo a partir de la base diaria estimada."""
+        ordered_brackets = list(cls.objects.filter(activo=True).order_by("numero_tramo"))
+        if not ordered_brackets:
+            return None
+
+        divisor = Decimal(str(num_days)) * Decimal(str(n_artistas))
+        if divisor <= 0:
+            divisor = Decimal("1")
+
+        base_diaria = (Decimal(str(base_imponible)) * Decimal("0.95")) / divisor
+
+        for tramo in ordered_brackets:
+            if tramo.rango_minimo <= base_diaria <= tramo.rango_maximo:
+                return tramo
+
+        # Si base_diaria supera el último tramo, devolver el último
+        return ordered_brackets[-1]
+
+    def calculate_costs(self, cache_net, irpf_percentage=None, honorarios_percentage=None, num_days=1, n_artistas=1):
         """
-        Cálculo desde Base Factura (cache_net) usando tramo por cache_neto.
-        La base de cotización se toma del tramo:
-        - Tramo 1: base = cache_neto.
-        - Tramos 2-4: base fija (importe_base).
+        Replica la lógica de la calculadora PHP usando la base imponible introducida.
         """
         porcentajes = CostPercentageSettings.get_solo()
 
@@ -83,37 +100,157 @@ class PriceBracket(models.Model):
             + porcentajes.desempleo_trabajador
             + porcentajes.formacion_trabajador
         )
+        
 
-        # Paso 1: Comisión de gestión
-        coste_gestion = cache_net * (porcentaje_honorarios_aplicado / Decimal("100"))
-
-        # Paso 2: Presupuesto de nómina disponible
-        presupuesto_nomina = cache_net - coste_gestion
-
-        # Base de cotización según tramo (tramo 1 usa cache_neto - honorarios)
-        if self.numero_tramo == 1:
-            base_cotizacion = cache_net - coste_gestion
-        else:
-            base_cotizacion = self.importe_base or cache_net
-
-        coste_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
-        salario_bruto = presupuesto_nomina - coste_empresa
-        if salario_bruto < 0:
-            salario_bruto = Decimal("0")
-
-        # Paso 6: Deducciones del trabajador, IRPF y Neto Líquido
-        coste_seguridad_social = base_cotizacion * (porcentaje_trabajador_total / Decimal("100"))
+        porcentaje_ss_total = porcentaje_empresa_total + porcentaje_trabajador_total
 
         porcentaje_irpf_aplicado = irpf_percentage if irpf_percentage is not None else Decimal("0")
-        base_irpf = salario_bruto - coste_seguridad_social
+        base_imponible = Decimal(str(cache_net))
+
+
+        dias = Decimal(str(num_days))
+        artistas = Decimal(str(n_artistas))
+        if dias <= 0:
+            dias = Decimal("1")
+        if artistas <= 0:
+            artistas = Decimal("1")
+
+        iva_porcentaje = Decimal("21")
+        iva_importe = base_imponible * (iva_porcentaje / Decimal("100"))
+        total_con_iva = base_imponible + iva_importe
+
+        factor_reduccion = Decimal("0.95")
+        base_diaria_estimada = (base_imponible * factor_reduccion) / (dias * artistas)
+
+        #print(f"base * factor reduccion: {base_imponible} * {factor_reduccion} = {base_imponible * factor_reduccion}")
+
+        if self.numero_tramo == 1:
+            base_cotizacion_diaria = base_diaria_estimada / (Decimal("1") + (porcentaje_empresa_total / Decimal("100")))
+        else:
+            base_cotizacion_diaria = self.importe_base or base_diaria_estimada
+
+        base_cotizacion = base_cotizacion_diaria * dias
+        
+        #print(f"base_cotizacion: {base_cotizacion}")
+        coste_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
+        coste_seguridad_social = base_cotizacion * (porcentaje_trabajador_total / Decimal("100"))
+        coste_ss_total = coste_empresa + coste_seguridad_social
+
+        coste_gestion = base_imponible * (porcentaje_honorarios_aplicado / Decimal("100"))
+        salario_bruto = (base_imponible * factor_reduccion) / artistas
+
+        base_irpf = salario_bruto - coste_empresa
         if base_irpf < 0:
             base_irpf = Decimal("0")
 
         coste_irpf = base_irpf * (porcentaje_irpf_aplicado / Decimal("100"))
-
-        neto = salario_bruto - coste_seguridad_social - coste_irpf
+        neto = (base_imponible / artistas) - coste_ss_total - (coste_gestion / artistas) - coste_irpf
         if neto < 0:
             neto = Decimal("0")
+
+        neto_total = neto * artistas
+
+        
+
+        return {
+            "coste_gestion": coste_gestion,
+            "presupuesto_nomina": salario_bruto,
+            "base_cotizacion": base_cotizacion,
+            "base_cotizacion_diaria": base_cotizacion_diaria,
+            "base_diaria_estimada": base_diaria_estimada,
+            "salario_bruto": salario_bruto,
+            "coste_empresa": coste_empresa,
+            "coste_seguridad_social": coste_seguridad_social,
+            "coste_ss_total": coste_ss_total,
+            "base_irpf": base_irpf,
+            "coste_irpf": coste_irpf,
+            "neto": neto,
+            "neto_total": neto_total,
+            "importe_bruto": salario_bruto,
+            "base_imponible": base_imponible,
+            "iva_porcentaje": iva_porcentaje,
+            "iva_importe": iva_importe,
+            "total_con_iva": total_con_iva,
+            "porcentaje_empresa_total": porcentaje_empresa_total,
+            "porcentaje_trabajador_total": porcentaje_trabajador_total,
+            "porcentaje_ss_total": porcentaje_ss_total,
+            "porcentaje_honorarios_aplicado": porcentaje_honorarios_aplicado,
+            "base_despues_honorarios": salario_bruto,
+            "base_calculo": base_cotizacion,
+        }
+
+    def calculate_costs_from_net(self, neto_liquido, irpf_percentage=None, honorarios_percentage=None):
+        """
+        Cálculo inverso: dado el neto líquido (lo que recibe el trabajador),
+        calcula el salario bruto y todos los costes asociados.
+        Usa iteración para resolver el sistema de ecuaciones.
+        """
+        porcentajes = CostPercentageSettings.get_solo()
+
+        porcentaje_honorarios_aplicado = (
+            honorarios_percentage if honorarios_percentage is not None
+            else porcentajes.porcentaje_honorarios
+        )
+
+        porcentaje_empresa_total = (
+            porcentajes.contingencias_comunes_empresa
+            + porcentajes.mei_empresa
+            + porcentajes.desempleo_empresa
+            + porcentajes.formacion_empresa
+            + porcentajes.at_ep_empresa
+            + porcentajes.fogasa_empresa
+        )
+        porcentaje_trabajador_total = (
+            porcentajes.contingencias_comunes_trabajador
+            + porcentajes.mei_trabajador
+            + porcentajes.desempleo_trabajador
+            + porcentajes.formacion_trabajador
+        )
+
+        porcentaje_irpf_aplicado = irpf_percentage if irpf_percentage is not None else Decimal("0")
+
+        # Iteración para encontrar salario_bruto que, después de descontar SS e IRPF, da el neto
+        salario_bruto = neto_liquido  # Aproximación inicial
+        for _ in range(100):  # Máximo 100 iteraciones
+            coste_seguridad_social = salario_bruto * (porcentaje_trabajador_total / Decimal("100"))
+            base_irpf = max(Decimal("0"), salario_bruto - coste_seguridad_social)
+            coste_irpf = base_irpf * (porcentaje_irpf_aplicado / Decimal("100"))
+            neto_calculado = salario_bruto - coste_seguridad_social - coste_irpf
+
+            # Si converge, salir
+            if abs(neto_calculado - neto_liquido) < Decimal("0.01"):
+                break
+
+            # Ajustar para la próxima iteración
+            if neto_calculado < neto_liquido:
+                salario_bruto += (neto_liquido - neto_calculado) * Decimal("1.01")
+            else:
+                salario_bruto -= (neto_calculado - neto_liquido) * Decimal("1.01")
+
+        # Una vez encontrado salario_bruto, calcular presupuesto_nomina y cache_net
+        presupuesto_nomina = salario_bruto + (salario_bruto * (porcentaje_empresa_total / Decimal("100")))
+        
+        # Calcular base_cotizacion según tramo
+        if self.numero_tramo == 1:
+            base_cotizacion = presupuesto_nomina
+        else:
+            base_cotizacion = self.importe_base or presupuesto_nomina
+
+        # Ajustar coste_empresa con la base de cotización correcta
+        coste_empresa = base_cotizacion * (porcentaje_empresa_total / Decimal("100"))
+        
+        # Recalcular presupuesto_nomina con base correcta
+        presupuesto_nomina = salario_bruto + coste_empresa
+        
+        # Cache neto es presupuesto + honorarios
+        coste_gestion = presupuesto_nomina * (porcentaje_honorarios_aplicado / Decimal("100"))
+        cache_net = presupuesto_nomina + coste_gestion
+
+        # Recalcular valores finales con las bases correctas
+        coste_seguridad_social = base_cotizacion * (porcentaje_trabajador_total / Decimal("100"))
+        base_irpf = max(Decimal("0"), salario_bruto - coste_seguridad_social)
+        coste_irpf = base_irpf * (porcentaje_irpf_aplicado / Decimal("100"))
+        neto = salario_bruto - coste_seguridad_social - coste_irpf
 
         return {
             "coste_gestion": coste_gestion,
@@ -125,11 +262,11 @@ class PriceBracket(models.Model):
             "base_irpf": base_irpf,
             "coste_irpf": coste_irpf,
             "neto": neto,
+            "cache_net": cache_net,
             "porcentaje_honorarios_aplicado": porcentaje_honorarios_aplicado,
-            "base_despues_honorarios": presupuesto_nomina,
-            "base_calculo": base_cotizacion,
+            "importe_bruto": salario_bruto,  # El importe bruto es el salario_bruto
+            "importe_total_empresa": salario_bruto + coste_empresa,  # Total que factura la empresa
         }
-
 
 class CostPercentageSettings(models.Model):
     contingencias_comunes_empresa = models.DecimalField(max_digits=7, decimal_places=4, default=Decimal("23.6"), verbose_name="Contingencias comunes empresa")
@@ -200,6 +337,7 @@ class ArtistRecord(models.Model):
     fecha_alta = models.DateField()
     fecha_baja = models.DateField(null=True, blank=True)
     solicitud_a1 = models.BooleanField(default=False, verbose_name="Solicitud A1")
+    destino_a1 = models.CharField(max_length=255, blank=True, verbose_name="Destino A1")
     proceso_cancelado = models.BooleanField(default=False)
     tipo_registro = models.CharField(max_length=10, choices=RegistrationType.choices, default=RegistrationType.SOLO)
     agrupacion = models.ForeignKey(Grouping, null=True, blank=True, on_delete=models.SET_NULL, related_name="registros_artistas")
@@ -236,18 +374,18 @@ class ArtistRecord(models.Model):
                 irpf_percentage=self.tipo_irpf,
                 honorarios_percentage=honorario_artista,
             )
-            self.coste_empresa = costs["coste_empresa"]
+            self.coste_empresa = costs["coste_ss_total"]
             self.coste_gestion = costs["coste_gestion"]
             self.coste_seguridad_social = costs["coste_seguridad_social"]
             self.coste_irpf = costs["coste_irpf"]
 
     @property
     def coste_total(self):
-        return self.coste_empresa + self.coste_gestion + self.coste_seguridad_social + self.coste_irpf
+        return self.coste_empresa + self.coste_gestion + self.coste_irpf
 
     @property
     def neto_para_pago(self):
-        # Neto = cache_neto - todos los costes (empresa, gestión, SS trabajador, IRPF)
+        # coste_empresa ya incluye SS empresa + trabajador
         return self.cache_neto - self.coste_total
 
     @property

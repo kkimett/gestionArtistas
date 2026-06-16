@@ -17,6 +17,8 @@ legend { font-weight: 700; padding: 0 8px; }
 .checkbox-copy { display: grid; gap: 3px; }
 .checkbox-copy label { font-weight: 700; }
 .checkbox-copy .meta { font-size: 13px; }
+.a1-destino { margin-top: 8px; }
+.a1-destino input[disabled] { opacity: .7; background: #eef2f7; cursor: not-allowed; }
 .field-highlight { padding: 14px; border: 1px solid #dbe3ea; border-radius: 12px; background: #fbfdff; }
 .info-tramo { margin-top: 8px; font-size: 13px; color: #1f2937; }
 .info-tramo.error { color: #b91c1c; }
@@ -28,9 +30,14 @@ legend { font-weight: 700; padding: 0 8px; }
 .importe-resumen .valor-grande { font-size: 38px; font-weight: 700; line-height: 1.1; margin: 4px 0 12px; }
 .importe-resumen .muted { color: #6b7280; font-size: 12px; }
 .importe-resumen .sublinea { margin: 0 0 6px; font-size: 14px; }
+.ss-desglose-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 12px 0; }
+.ss-columna { background: #ffffffb3; border: 1px solid #d7d3e6; border-radius: 10px; padding: 12px; }
+.ss-columna .linea { margin-bottom: 8px; }
+.ss-columna .sublinea { margin-bottom: 4px; }
 @media (max-width: 900px) {
     .grid-3 { grid-template-columns: 1fr; }
     .checkbox-group { grid-template-columns: 1fr; }
+    .ss-desglose-grid { grid-template-columns: 1fr; }
 }
 {% endblock %}
 
@@ -96,6 +103,12 @@ legend { font-weight: 700; padding: 0 8px; }
                                 <div class="checkbox-copy">
                                     {{ form.solicitud_a1.label_tag }}
                                     <span class="meta">Indica si este registro requiere o incluye solicitud A1.</span>
+                                    <div class="a1-destino">
+                                        {{ form.destino_a1.label_tag }}
+                                        {{ form.destino_a1 }}
+                                        {{ form.destino_a1.errors }}
+                                        <span class="meta"></span>
+                                    </div>
                                 </div>
                             </div>
                             <div class="checkbox-card">
@@ -172,25 +185,35 @@ legend { font-weight: 700; padding: 0 8px; }
                     </div>
 
                     <div class="importe-resumen" id="importe-resumen">
+                        <!--div style="background-color: #f5f5f5; padding: 10px; margin-bottom: 15px; border-left: 4px solid #333; font-weight: bold;">
+                            <p class="linea"><strong>📊 Importe Bruto:</strong> <span id="resumen-importe-bruto" style="font-size: 1.2em; color: #333;">0,00€</span></p>
+                        </div-->
+
                         <p class="linea"><strong><span id="resumen-cache">0,00€</span> + IVA (<span id="resumen-iva-pct">21%</span>): <span id="resumen-total-iva">0,00€</span></strong> <span class="muted">(<span id="resumen-iva-importe">0,00€</span> de IVA)</span></p>
                         <p class="linea"><strong>Honorarios GestArt (<span id="resumen-honorarios-pct">0%</span>):</strong> <span id="resumen-honorarios">0,00€</span></p>
                         <p class="linea muted">Presupuesto nómina disponible: <span id="resumen-presupuesto-nomina">0,00€</span></p>
+                        <p class="linea"><strong>Coste SS total (empresa + trabajador) (<span id="resumen-ss-total-pct">0%</span>):</strong> <span id="resumen-ss-total">0,00€</span></p>
 
-                        <p class="linea"><strong>Coste SS empresa (<span id="resumen-ss-emp-pct-total">0%</span>):</strong> <span id="resumen-ss-empresa">0,00€</span></p>
-                        <p class="sublinea">Contingencias comunes empresa (<span id="resumen-cc-emp-pct">0%</span>): <span id="resumen-cc-emp-imp">0,00€</span></p>
-                        <p class="sublinea">MEI empresa (<span id="resumen-mei-emp-pct">0%</span>): <span id="resumen-mei-emp-imp">0,00€</span></p>
-                        <p class="sublinea">Desempleo empresa (<span id="resumen-des-emp-pct">0%</span>): <span id="resumen-des-emp-imp">0,00€</span></p>
-                        <p class="sublinea">Formación empresa (<span id="resumen-for-emp-pct">0%</span>): <span id="resumen-for-emp-imp">0,00€</span></p>
-                        <p class="sublinea">AT y EP empresa (<span id="resumen-at-emp-pct">0%</span>): <span id="resumen-at-emp-imp">0,00€</span></p>
-                        <p class="sublinea">FOGASA empresa (<span id="resumen-fogasa-pct">0%</span>): <span id="resumen-fogasa-imp">0,00€</span></p>
+                        <div class="ss-desglose-grid">
+                            <div class="ss-columna">
+                                <p class="linea"><strong>Coste SS empresa (<span id="resumen-ss-emp-pct-total">0%</span>):</strong> <span id="resumen-ss-empresa">0,00€</span></p>
+                                <p class="sublinea">Contingencias comunes empresa (<span id="resumen-cc-emp-pct">0%</span>): <span id="resumen-cc-emp-imp">0,00€</span></p>
+                                <p class="sublinea">MEI empresa (<span id="resumen-mei-emp-pct">0%</span>): <span id="resumen-mei-emp-imp">0,00€</span></p>
+                                <p class="sublinea">Desempleo empresa (<span id="resumen-des-emp-pct">0%</span>): <span id="resumen-des-emp-imp">0,00€</span></p>
+                                <p class="sublinea">Formación empresa (<span id="resumen-for-emp-pct">0%</span>): <span id="resumen-for-emp-imp">0,00€</span></p>
+                                <p class="sublinea">AT y EP empresa (<span id="resumen-at-emp-pct">0%</span>): <span id="resumen-at-emp-imp">0,00€</span></p>
+                                <p class="sublinea">FOGASA empresa (<span id="resumen-fogasa-pct">0%</span>): <span id="resumen-fogasa-imp">0,00€</span></p>
+                            </div>
+                            <div class="ss-columna">
+                                <p class="linea"><strong>Coste SS trabajador (<span id="resumen-ss-tra-pct-total">0%</span>):</strong> <span id="resumen-ss">0,00€</span></p>
+                                <p class="sublinea">Contingencias comunes trabajador (<span id="resumen-cc-tra-pct">0%</span>): <span id="resumen-cc-tra-imp">0,00€</span></p>
+                                <p class="sublinea">MEI trabajador (<span id="resumen-mei-tra-pct">0%</span>): <span id="resumen-mei-tra-imp">0,00€</span></p>
+                                <p class="sublinea">Desempleo trabajador (<span id="resumen-des-tra-pct">0%</span>): <span id="resumen-des-tra-imp">0,00€</span></p>
+                                <p class="sublinea">Formación trabajador (<span id="resumen-for-tra-pct">0%</span>): <span id="resumen-for-tra-imp">0,00€</span></p>
+                            </div>
+                        </div>
 
                         <p class="linea"><strong>Salario Bruto Real:</strong> <span id="resumen-salario-bruto">0,00€</span> <span class="muted">(base cotización: <span id="resumen-base-cotizacion">0,00€</span>)</span></p>
-
-                        <p class="linea"><strong>Coste SS trabajador (<span id="resumen-ss-tra-pct-total">0%</span>):</strong> <span id="resumen-ss">0,00€</span></p>
-                        <p class="sublinea">Contingencias comunes trabajador (<span id="resumen-cc-tra-pct">0%</span>): <span id="resumen-cc-tra-imp">0,00€</span></p>
-                        <p class="sublinea">MEI trabajador (<span id="resumen-mei-tra-pct">0%</span>): <span id="resumen-mei-tra-imp">0,00€</span></p>
-                        <p class="sublinea">Desempleo trabajador (<span id="resumen-des-tra-pct">0%</span>): <span id="resumen-des-tra-imp">0,00€</span></p>
-                        <p class="sublinea">Formación trabajador (<span id="resumen-for-tra-pct">0%</span>): <span id="resumen-for-tra-imp">0,00€</span></p>
 
                         <p class="linea muted">Base sujeta a IRPF: <span id="resumen-base-irpf">0,00€</span></p>
                         <p class="linea"><strong>Coste IRPF por artista (<span id="resumen-irpf-pct">0%</span>):</strong> <span id="resumen-irpf">0,00€</span></p>
@@ -235,8 +258,12 @@ legend { font-weight: 700; padding: 0 8px; }
         const artistaInput = document.getElementById("id_artista");
         const tipoRegistroInput = document.getElementById("id_tipo_registro");
         const agrupacionInput = document.getElementById("id_agrupacion");
+        const fechaAltaInput = document.getElementById("id_fecha_alta");
+        const fechaBajaInput = document.getElementById("id_fecha_baja");
         const importeEntregadoInput = document.getElementById("id_importe_entregado");
         const importePendienteInput = document.getElementById("importe_pendiente_visual");
+        const solicitudA1Input = document.getElementById("id_solicitud_a1");
+        const destinoA1Input = document.getElementById("id_destino_a1");
         const infoTramo = document.getElementById("info-tramo");
 
         const resumenCache = document.getElementById("resumen-cache");
@@ -249,12 +276,15 @@ legend { font-weight: 700; padding: 0 8px; }
         const resumenHonorariosPct = document.getElementById("resumen-honorarios-pct");
         const resumenHonorarios = document.getElementById("resumen-honorarios");
         const resumenPresupuestoNomina = document.getElementById("resumen-presupuesto-nomina");
+        const resumenSsTotal = document.getElementById("resumen-ss-total");
+        const resumenSsTotalPct = document.getElementById("resumen-ss-total-pct");
         const resumenSsEmpresaTotal = document.getElementById("resumen-ss-empresa");
         const resumenSsEmpPctTotal = document.getElementById("resumen-ss-emp-pct-total");
         const resumenSalarioBruto = document.getElementById("resumen-salario-bruto");
         const resumenBaseCotizacion = document.getElementById("resumen-base-cotizacion");
         const resumenSsTraPctTotal = document.getElementById("resumen-ss-tra-pct-total");
         const resumenBaseIrpf = document.getElementById("resumen-base-irpf");
+        const resumenImporteBruto = document.getElementById("resumen-importe-bruto");
         const resumenNetoArtista = document.getElementById("resumen-neto-artista");
         const resumenCantidad = document.getElementById("resumen-cantidad");
         const resumenNetoTotal = document.getElementById("resumen-neto-total");
@@ -316,6 +346,17 @@ legend { font-weight: 700; padding: 0 8px; }
             return number.toLocaleString("es-ES", { minimumFractionDigits: decimals, maximumFractionDigits: decimals }) + "%";
         }
 
+        function actualizarDestinoA1() {
+            if (!solicitudA1Input || !destinoA1Input) {
+                return;
+            }
+            const habilitado = Boolean(solicitudA1Input.checked);
+            destinoA1Input.disabled = !habilitado;
+            if (!habilitado) {
+                destinoA1Input.value = "";
+            }
+        }
+
         function actualizarResumenDesdeCampos() {
             const cacheNeto = toNumber(cacheNetoInput?.value);
             const costeEmpresa = toNumber(costeEmpresaInput?.value);
@@ -328,18 +369,21 @@ legend { font-weight: 700; padding: 0 8px; }
             const ivaPct = configBackend.ivaPct;
             const ivaImporte = cacheNeto * ivaPct / 100;
             const totalConIva = cacheNeto + ivaImporte;
-            const ssImporte = costeSeguridadSocial;
-            // Neto = cache_neto - todos los costes (empresa + gestión + SS trabajador + IRPF)
-            const netoArtista = Math.max(0, cacheNeto - (costeEmpresa + costeGestion + costeSeguridadSocial + costeIrpf));
+            const ssTrabajador = costeSeguridadSocial;
+            const ssEmpresa = Math.max(0, costeEmpresa - ssTrabajador);
+            // costeEmpresa ya incluye SS empresa + SS trabajador
+            const netoArtista = Math.max(0, cacheNeto - (costeEmpresa + costeGestion + costeIrpf));
 
+            if (resumenImporteBruto) resumenImporteBruto.textContent = formatMoney(cacheNeto);
             if (resumenCache) resumenCache.textContent = formatMoney(cacheNeto);
             if (resumenIvaPct) resumenIvaPct.textContent = formatPercent(ivaPct, 0);
             if (resumenTotalIva) resumenTotalIva.textContent = formatMoney(totalConIva);
             if (resumenIvaImporte) resumenIvaImporte.textContent = formatMoney(ivaImporte);
             if (resumenHonorarios) resumenHonorarios.textContent = formatMoney(costeGestion);
             if (resumenPresupuestoNomina) resumenPresupuestoNomina.textContent = formatMoney(cacheNeto - costeGestion);
-            if (resumenSsEmpresaTotal) resumenSsEmpresaTotal.textContent = formatMoney(costeEmpresa);
-            if (resumenSs) resumenSs.textContent = formatMoney(ssImporte);
+            if (resumenSsTotal) resumenSsTotal.textContent = formatMoney(costeEmpresa);
+            if (resumenSsEmpresaTotal) resumenSsEmpresaTotal.textContent = formatMoney(ssEmpresa);
+            if (resumenSs) resumenSs.textContent = formatMoney(ssTrabajador);
             if (resumenIrpfPct) resumenIrpfPct.textContent = formatPercent(tipoIrpf, 2);
             if (resumenIrpf) resumenIrpf.textContent = formatMoney(costeIrpf);
             if (resumenNetoArtista) resumenNetoArtista.textContent = formatMoney(netoArtista);
@@ -359,7 +403,7 @@ legend { font-weight: 700; padding: 0 8px; }
             const costeSeguridadSocial = toNumber(costeSeguridadSocialInput?.value);
             const costeIrpf = toNumber(costeIrpfInput?.value);
             const importeEntregado = toNumber(importeEntregadoInput?.value);
-            const netoPago = cacheNeto - (costeEmpresa + costeGestion + costeSeguridadSocial + costeIrpf);
+            const netoPago = cacheNeto - (costeEmpresa + costeGestion + costeIrpf);
             const pendiente = Math.max(0, netoPago - importeEntregado);
             importePendienteInput.value = pendiente.toFixed(2);
         }
@@ -374,7 +418,7 @@ legend { font-weight: 700; padding: 0 8px; }
 
             try {
                 const tipoIrpf = (tipoIrpfInput?.value || "").trim().replace(",", ".");
-                const params = new URLSearchParams({ cache_neto: valor });
+                const params = new URLSearchParams({ cache_neto: valor, contexto: "registro" });
                 if (tipoIrpf) {
                     params.set("tipo_irpf", tipoIrpf);
                 }
@@ -389,6 +433,14 @@ legend { font-weight: 700; padding: 0 8px; }
                 }
                 if (agrupacion) {
                     params.set("agrupacion", agrupacion);
+                }
+                const fechaAlta = (fechaAltaInput?.value || "").trim();
+                const fechaBaja = (fechaBajaInput?.value || "").trim();
+                if (fechaAlta) {
+                    params.set("fecha_alta", fechaAlta);
+                }
+                if (fechaBaja) {
+                    params.set("fecha_baja", fechaBaja);
                 }
                 const url = `{% url 'artists:calcular-costes' %}?${params.toString()}`;
                 const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
@@ -405,6 +457,7 @@ legend { font-weight: 700; padding: 0 8px; }
                 if (costeSeguridadSocialInput) costeSeguridadSocialInput.value = data.costes.coste_seguridad_social;
                 if (costeIrpfInput) costeIrpfInput.value = data.costes.coste_irpf;
 
+                if (resumenImporteBruto) resumenImporteBruto.textContent = formatMoney(data.resumen.importe_bruto);
                 if (resumenIvaPct) resumenIvaPct.textContent = formatPercent(data.resumen.iva_porcentaje, 0);
                 if (resumenIvaImporte) resumenIvaImporte.textContent = formatMoney(data.resumen.iva_importe);
                 if (resumenTotalIva) resumenTotalIva.textContent = formatMoney(data.resumen.total_con_iva);
@@ -412,6 +465,8 @@ legend { font-weight: 700; padding: 0 8px; }
                 if (resumenPresupuestoNomina) resumenPresupuestoNomina.textContent = formatMoney(data.resumen.presupuesto_nomina);
                 if (resumenSalarioBruto) resumenSalarioBruto.textContent = formatMoney(data.resumen.salario_bruto);
                 if (resumenBaseCotizacion) resumenBaseCotizacion.textContent = formatMoney(data.resumen.base_cotizacion);
+                if (resumenSsTotal) resumenSsTotal.textContent = formatMoney(data.resumen.coste_ss_total);
+                if (resumenSsTotalPct) resumenSsTotalPct.textContent = formatPercent(data.resumen.porcentaje_ss_total, 2);
                 if (resumenSsEmpresaTotal) resumenSsEmpresaTotal.textContent = formatMoney(data.resumen.coste_ss_empresa);
                 if (resumenIrpfPct) resumenIrpfPct.textContent = formatPercent(data.resumen.porcentaje_irpf, 2);
                 if (resumenBaseIrpf) resumenBaseIrpf.textContent = formatMoney(data.resumen.base_irpf);
@@ -489,12 +544,23 @@ legend { font-weight: 700; padding: 0 8px; }
         if (agrupacionInput) {
             agrupacionInput.addEventListener("change", calcularCostes);
         }
+        if (fechaAltaInput) {
+            fechaAltaInput.addEventListener("change", calcularCostes);
+        }
+        if (fechaBajaInput) {
+            fechaBajaInput.addEventListener("change", calcularCostes);
+        }
         if (importeEntregadoInput) {
             importeEntregadoInput.addEventListener("input", actualizarPendiente);
+        }
+        if (solicitudA1Input) {
+            solicitudA1Input.addEventListener("change", actualizarDestinoA1);
         }
         [cacheNetoInput, costeEmpresaInput, costeGestionInput, costeSeguridadSocialInput, costeIrpfInput, tipoIrpfInput].forEach((input) => {
             input?.addEventListener("input", actualizarResumenDesdeCampos);
         });
+
+        actualizarDestinoA1();
         actualizarPendiente();
         actualizarResumenDesdeCampos();
         // Si es edición (ya hay cache_neto), recalcular desde el backend al cargar

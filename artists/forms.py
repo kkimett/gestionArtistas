@@ -1,4 +1,6 @@
 import re
+import json
+from decimal import Decimal, InvalidOperation
 
 from django import forms
 from django.core.exceptions import ValidationError
@@ -117,6 +119,7 @@ class ArtistRecordForm(forms.ModelForm):
         "fecha_alta",
         "fecha_baja",
         "solicitud_a1",
+        "destino_a1",
         "proceso_cancelado",
         "tipo_registro",
         "agrupacion",
@@ -139,6 +142,7 @@ class ArtistRecordForm(forms.ModelForm):
             "fecha_alta",
             "fecha_baja",
             "solicitud_a1",
+            "destino_a1",
             "proceso_cancelado",
             "tipo_registro",
             "agrupacion",
@@ -184,6 +188,13 @@ class ArtistRecordForm(forms.ModelForm):
         if cleaned_data.get("es_autonomo") and not cleaned_data.get("tipo_irpf"):
             self.add_error("tipo_irpf", "Debes indicar un tipo de IRPF para autónomos.")
 
+        solicitud_a1 = cleaned_data.get("solicitud_a1")
+        destino_a1 = (cleaned_data.get("destino_a1") or "").strip()
+        if solicitud_a1 and not destino_a1:
+            self.add_error("destino_a1", "Indica el destino cuando la Solicitud A1 esté marcada.")
+        if not solicitud_a1:
+            cleaned_data["destino_a1"] = ""
+
         estado_pago = cleaned_data.get("estado_pago")
         importe_entregado = cleaned_data.get("importe_entregado")
         neto_para_pago = (cleaned_data.get("cache_neto") or 0) - (
@@ -208,6 +219,123 @@ class ArtistRecordForm(forms.ModelForm):
         if commit:
             instance.save()
         return instance
+
+
+class GroupingRecordBatchForm(forms.Form):
+    agrupacion = forms.ModelChoiceField(
+        queryset=Grouping.objects.filter(activo=True).order_by("nombre"),
+        label="Agrupación",
+    )
+    lineas = forms.CharField(widget=forms.HiddenInput(), required=False)
+    fecha_alta = forms.DateField(widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}), label="Fecha alta")
+    fecha_baja = forms.DateField(
+        required=False,
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+        label="Fecha baja",
+    )
+    proceso_cancelado = forms.BooleanField(required=False, label="Proceso cancelado")
+    estado_pago = forms.ChoiceField(
+        choices=ArtistRecord.PaymentStatus.choices,
+        initial=ArtistRecord.PaymentStatus.IN_PROGRESS,
+        label="Estado de pago",
+    )
+    observaciones = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), label="Observaciones")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fecha_alta"].input_formats = ["%Y-%m-%d"]
+        self.fields["fecha_baja"].input_formats = ["%Y-%m-%d"]
+
+    def clean_lineas(self):
+        raw_value = (self.cleaned_data.get("lineas") or "").strip()
+        if not raw_value:
+            raise ValidationError("Añade al menos un artista con su caché.")
+
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ValidationError("No se pudieron interpretar las líneas de artistas.") from exc
+
+        if not isinstance(parsed, list) or not parsed:
+            raise ValidationError("Añade al menos una línea de artista.")
+
+        normalized = []
+        artist_ids = []
+        repeated = set()
+        seen = set()
+
+        for index, item in enumerate(parsed, start=1):
+            if not isinstance(item, dict):
+                raise ValidationError(f"Línea {index}: formato inválido.")
+
+            artist_id = str(item.get("artista_id", "")).strip()
+            cache_raw = str(item.get("cache_neto", "")).strip().replace(",", ".")
+            es_autonomo = bool(item.get("es_autonomo", False))
+            solicitud_a1 = bool(item.get("solicitud_a1", False))
+            destino_a1 = str(item.get("destino_a1", "")).strip()
+
+            if not artist_id:
+                raise ValidationError(f"Línea {index}: falta el artista.")
+            if not cache_raw:
+                raise ValidationError(f"Línea {index}: falta el caché neto.")
+
+            try:
+                cache_neto = Decimal(cache_raw)
+            except InvalidOperation as exc:
+                raise ValidationError(f"Línea {index}: el caché neto no es válido.") from exc
+
+            if cache_neto <= 0:
+                raise ValidationError(f"Línea {index}: el caché neto debe ser mayor que 0.")
+
+            if solicitud_a1 and not destino_a1:
+                raise ValidationError(f"Línea {index}: indica destino cuando Solicitud A1 está marcada.")
+            if not solicitud_a1:
+                destino_a1 = ""
+
+            if artist_id in seen:
+                repeated.add(artist_id)
+            seen.add(artist_id)
+            artist_ids.append(artist_id)
+            normalized.append(
+                {
+                    "artista_id": artist_id,
+                    "cache_neto": cache_neto,
+                    "es_autonomo": es_autonomo,
+                    "solicitud_a1": solicitud_a1,
+                    "destino_a1": destino_a1,
+                }
+            )
+
+        if repeated:
+            raise ValidationError("Hay artistas repetidos en las líneas. Deja solo una línea por artista.")
+
+        artists = Artist.objects.filter(pk__in=artist_ids)
+        artists_map = {str(artist.pk): artist for artist in artists}
+        if len(artists_map) != len(set(artist_ids)):
+            raise ValidationError("Algunos artistas seleccionados ya no existen.")
+
+        self.cleaned_data["lineas_normalizadas"] = [
+            {
+                "artista": artists_map[item["artista_id"]],
+                "cache_neto": item["cache_neto"],
+                "es_autonomo": item["es_autonomo"],
+                "solicitud_a1": item["solicitud_a1"],
+                "destino_a1": item["destino_a1"],
+            }
+            for item in normalized
+        ]
+
+        return raw_value
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        fecha_alta = cleaned_data.get("fecha_alta")
+        fecha_baja = cleaned_data.get("fecha_baja")
+        if fecha_alta and fecha_baja and fecha_baja < fecha_alta:
+            self.add_error("fecha_baja", "La fecha de baja no puede ser anterior a la fecha de alta.")
+
+        return cleaned_data
 
 
 class GroupingForm(forms.ModelForm):
