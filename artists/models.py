@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -319,6 +320,40 @@ class Artist(models.Model):
         return self.nombre_completo
 
 
+class GroupingRecordBatch(models.Model):
+    class BatchStatus(models.TextChoices):
+        STANDBY = "STANDBY", "Stand By"
+        PROCESSED = "PROCESSED", "Procesado"
+
+    class PaymentStatus(models.TextChoices):
+        PAID = "PAID", "Pagado"
+        PENDING_INVOICE = "PENDING_INVOICE", "Pendiente pago"
+        IN_PROGRESS = "IN_PROGRESS", "En Proceso"
+        PARTIAL = "PARTIAL", "Pago a Medias"
+        CANCELLED = "CANCELLED", "Anulado"
+
+    agrupacion = models.ForeignKey(Grouping, on_delete=models.CASCADE, related_name="lotes_registros")
+    lineas = models.JSONField(default=list)
+    fecha_alta = models.DateField()
+    fecha_baja = models.DateField(null=True, blank=True)
+    proceso_cancelado = models.BooleanField(default=False)
+    estado_pago = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.IN_PROGRESS)
+    observaciones = models.TextField(blank=True)
+    estado = models.CharField(max_length=20, choices=BatchStatus.choices, default=BatchStatus.STANDBY)
+    generado_en = models.DateTimeField(null=True, blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "lotes_registros_agrupaciones"
+        verbose_name = "Lote de registros por agrupacion"
+        verbose_name_plural = "Lotes de registros por agrupacion"
+        ordering = ["-creado_en"]
+
+    def __str__(self):
+        return f"{self.agrupacion.nombre} - {self.get_estado_display()} ({self.creado_en:%Y-%m-%d %H:%M})"
+
+
 class ArtistRecord(models.Model):
     class RegistrationType(models.TextChoices):
         SOLO = "SOLO", "Solista"
@@ -341,6 +376,13 @@ class ArtistRecord(models.Model):
     proceso_cancelado = models.BooleanField(default=False)
     tipo_registro = models.CharField(max_length=10, choices=RegistrationType.choices, default=RegistrationType.SOLO)
     agrupacion = models.ForeignKey(Grouping, null=True, blank=True, on_delete=models.SET_NULL, related_name="registros_artistas")
+    lote_agrupacion = models.ForeignKey(
+        GroupingRecordBatch,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="registros_creados",
+    )
     cache_neto = models.DecimalField(max_digits=10, decimal_places=2)
     coste_empresa = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     coste_gestion = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -378,6 +420,49 @@ class ArtistRecord(models.Model):
             self.coste_gestion = costs["coste_gestion"]
             self.coste_seguridad_social = costs["coste_seguridad_social"]
             self.coste_irpf = costs["coste_irpf"]
+
+    def clean(self):
+        super().clean()
+
+        if self.fecha_baja and self.fecha_baja < self.fecha_alta:
+            raise ValidationError({"fecha_baja": "La fecha de baja no puede ser anterior a la fecha de alta."})
+
+        if not self.artista_id or not self.fecha_alta:
+            return
+
+        otros_registros = ArtistRecord.objects.filter(artista_id=self.artista_id).exclude(pk=self.pk)
+
+        # No permitir más de un registro abierto por artista.
+        if self.fecha_baja is None and otros_registros.filter(fecha_baja__isnull=True).exists():
+            raise ValidationError(
+                {
+                    "fecha_alta": (
+                        "Ya existe un registro abierto para este artista (sin fecha de baja). "
+                        "Cierra ese registro antes de crear uno nuevo."
+                    )
+                }
+            )
+
+        # Evita solapes de periodos para mantener la temporalidad consistente.
+        if self.fecha_baja is None:
+            hay_solape = otros_registros.filter(
+                models.Q(fecha_baja__isnull=True) | models.Q(fecha_baja__gte=self.fecha_alta)
+            ).exists()
+        else:
+            hay_solape = otros_registros.filter(
+                models.Q(fecha_baja__isnull=True, fecha_alta__lte=self.fecha_baja)
+                | models.Q(fecha_alta__lte=self.fecha_baja, fecha_baja__gte=self.fecha_alta)
+            ).exists()
+
+        if hay_solape:
+            raise ValidationError(
+                {
+                    "fecha_alta": (
+                        "Las fechas se solapan con otro registro del artista. "
+                        "Revisa fechas de alta y baja antes de guardar."
+                    )
+                }
+            )
 
     @property
     def coste_total(self):

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}Detalle registro agrupacion{% endblock %}
+
+{% block extra_css %}
+.header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.header-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+.panel { background: #fff; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); border: 1px solid #e5e7eb; padding: 16px; }
+.grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.meta-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px; }
+.meta-label { font-size: 12px; font-weight: 700; color: #6b7280; }
+.meta-value { font-size: 15px; font-weight: 600; margin-top: 4px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+th { background: #f9fafb; }
+@media (max-width: 920px) {
+    .grid { grid-template-columns: 1fr; }
+}
+{% endblock %}
+
+{% block content %}
+<div class="header">
+    <div>
+        <h1>Detalle de registro por agrupación</h1>
+        <p class="meta">Vista solo lectura de un registro ya guardado.</p>
+    </div>
+    <div class="header-actions">
+        <a class="button secondary" href="{% url 'artists:record-grouping-list' %}">Volver</a>
+    </div>
+</div>
+
+<div class="panel">
+    <div class="grid">
+        <div class="meta-item">
+            <div class="meta-label">Agrupación</div>
+            <div class="meta-value">{{ batch.agrupacion.nombre }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Estado</div>
+            <div class="meta-value">{{ batch.get_estado_display }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Estado de pago</div>
+            <div class="meta-value">{{ batch.get_estado_pago_display }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Fecha alta</div>
+            <div class="meta-value">{{ batch.fecha_alta|date:"d/m/Y" }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Fecha baja</div>
+            <div class="meta-value">{{ batch.fecha_baja|date:"d/m/Y"|default:"-" }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Generado</div>
+            <div class="meta-value">{{ batch.generado_en|date:"d/m/Y H:i"|default:"-" }}</div>
+        </div>
+    </div>
+
+    {% if batch.observaciones %}
+    <div class="meta-item" style="margin-bottom: 14px;">
+        <div class="meta-label">Observaciones</div>
+        <div class="meta-value">{{ batch.observaciones }}</div>
+    </div>
+    {% endif %}
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Artista</th>
+                    <th>Caché neto</th>
+                    <th>Autónomo</th>
+                    <th>Solicitud A1</th>
+                    <th>Destino A1</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linea in lineas_detalle %}
+                <tr>
+                    <td>{{ linea.artista_nombre }}</td>
+                    <td>{{ linea.cache_neto }}</td>
+                    <td>{% if linea.es_autonomo %}Sí{% else %}No{% endif %}</td>
+                    <td>{% if linea.solicitud_a1 %}Sí{% else %}No{% endif %}</td>
+                    <td>{{ linea.destino_a1|default:"-" }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5">Sin líneas guardadas.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

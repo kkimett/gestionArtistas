@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django import forms
 
-from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, PriceBracket
+from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, GroupingRecordBatch, PriceBracket
 
 
 @admin.register(Grouping)
@@ -205,3 +205,11 @@ class ArtistRecordAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         obj.calculate_and_update_costs()
         super().save_model(request, obj, form, change)
+
+
+@admin.register(GroupingRecordBatch)
+class GroupingRecordBatchAdmin(admin.ModelAdmin):
+    list_display = ("agrupacion", "estado", "fecha_alta", "estado_pago", "creado_en", "generado_en")
+    list_filter = ("estado", "estado_pago", "proceso_cancelado", "agrupacion")
+    search_fields = ("agrupacion__nombre", "observaciones")
+    readonly_fields = ("creado_en", "actualizado_en", "generado_en")

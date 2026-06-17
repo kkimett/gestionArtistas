@@ -8,15 +8,18 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Count, Max, Q
+from django.db.models import Count, F, Max, Prefetch, Q
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.urls import reverse_lazy
+from django.views import View
 from django.views.generic import CreateView, DeleteView, FormView, ListView, TemplateView, UpdateView
 
 from .forms import ArtistCSVUploadForm, ArtistForm, ArtistRecordForm, GroupingForm, GroupingRecordBatchForm
-from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, PriceBracket
+from .models import Artist, ArtistRecord, CostPercentageSettings, Grouping, GroupingRecordBatch, PriceBracket
 
 
 def calcular_num_dias(fecha_alta_raw, fecha_baja_raw):
@@ -238,40 +241,68 @@ def calcular_costes_por_tramo(request):
 
 @login_required
 def calcular_costes_desde_neto(request):
-    """Calcula costes a partir del salario neto líquido (SAL.LIQUID)"""
+    """Calcula costes a partir de un neto total objetivo, invirtiendo el cálculo de caché neto."""
+    neto_total_raw = request.GET.get("neto_total", "").strip()
     neto_liquido = request.GET.get("neto_liquido", "").strip()
     tipo_irpf = request.GET.get("tipo_irpf", "").strip()
     artista_id = request.GET.get("artista", "").strip()
     tipo_registro = request.GET.get("tipo_registro", "").strip()
     agrupacion_id = request.GET.get("agrupacion", "").strip()
     contexto_calculo = request.GET.get("contexto", "registro").strip()
+    fecha_alta_raw = request.GET.get("fecha_alta", "").strip()
+    fecha_baja_raw = request.GET.get("fecha_baja", "").strip()
+    num_dias_raw = request.GET.get("num_dias", "").strip()
+    n_artistas_raw = request.GET.get("n_artistas", "").strip()
     honorario_artista = None
     porcentaje_irpf = None
+    importe_neto_objetivo = None
 
-    if not neto_liquido:
-        return JsonResponse({"ok": False, "error": "Debes indicar un salario neto."}, status=400)
+    porcentajes = CostPercentageSettings.get_solo()
+    cantidad_artistas = Decimal("1")
+
+    if n_artistas_raw:
+        try:
+            n_artistas_val = int(n_artistas_raw)
+            if n_artistas_val > 0:
+                cantidad_artistas = Decimal(n_artistas_val)
+        except (ValueError, TypeError):
+            pass
+    elif contexto_calculo == "agrupacion" and tipo_registro == ArtistRecord.RegistrationType.BAND and agrupacion_id:
+        try:
+            agrupacion = Grouping.objects.filter(pk=agrupacion_id).first()
+            if agrupacion:
+                total = agrupacion.artistas.count()
+                if total > 0:
+                    cantidad_artistas = Decimal(total)
+        except Exception:
+            cantidad_artistas = Decimal("1")
+
+    if num_dias_raw:
+        try:
+            num_dias_val = int(num_dias_raw)
+            num_dias = Decimal(num_dias_val if num_dias_val > 0 else 1)
+        except (ValueError, TypeError):
+            num_dias = calcular_num_dias(fecha_alta_raw, fecha_baja_raw)
+    else:
+        num_dias = calcular_num_dias(fecha_alta_raw, fecha_baja_raw)
+
+    neto_input = neto_total_raw or neto_liquido
+    if not neto_input:
+        return JsonResponse({"ok": False, "error": "Debes indicar un neto total objetivo."}, status=400)
 
     try:
-        importe_neto_liquido = Decimal(neto_liquido)
+        importe_neto_objetivo = Decimal(neto_input)
     except InvalidOperation:
-        return JsonResponse({"ok": False, "error": "El salario neto no tiene un formato válido."}, status=400)
+        return JsonResponse({"ok": False, "error": "El neto total no tiene un formato válido."}, status=400)
 
-    if importe_neto_liquido <= 0:
-        return JsonResponse({"ok": False, "error": "El salario neto debe ser mayor que 0."}, status=400)
+    if importe_neto_objetivo <= 0:
+        return JsonResponse({"ok": False, "error": "El neto total debe ser mayor que 0."}, status=400)
 
-    # Obtener artista para coger su IRPF e honorario
-    artista = None
     if artista_id:
         artista = Artist.objects.filter(pk=artista_id).first()
-        if artista:
-            # Usar IRPF del artista por defecto
-            if not tipo_irpf and artista.irpf is not None:
-                porcentaje_irpf = artista.irpf
-            # Usar honorario del artista
-            if artista.honorario is not None:
-                honorario_artista = artista.honorario
+        if artista and artista.honorario is not None:
+            honorario_artista = artista.honorario
 
-    # Si se proporciona explícitamente IRPF, usar ese
     if tipo_irpf:
         try:
             porcentaje_irpf = Decimal(tipo_irpf)
@@ -280,29 +311,87 @@ def calcular_costes_desde_neto(request):
         if porcentaje_irpf < 0:
             return JsonResponse({"ok": False, "error": "El tipo de IRPF no puede ser negativo."}, status=400)
 
-    # Usar el tramo 1 por defecto para calcular desde neto
-    # El tramo se determinaría por el salario_bruto resultante
-    tramo = PriceBracket.objects.filter(numero_tramo=1, activo=True).first()
-    if not tramo:
-        return JsonResponse({"ok": False, "error": "No existe un tramo activo para calcular."}, status=404)
-
-    costes = tramo.calculate_costs_from_net(
-        importe_neto_liquido,
-        irpf_percentage=porcentaje_irpf,
-        honorarios_percentage=honorario_artista,
+    porcentaje_empresa_total = (
+        porcentajes.contingencias_comunes_empresa
+        + porcentajes.mei_empresa
+        + porcentajes.desempleo_empresa
+        + porcentajes.formacion_empresa
+        + porcentajes.at_ep_empresa
+        + porcentajes.fogasa_empresa
     )
 
-    # Si el salario bruto está fuera del rango del tramo 1, buscar tramo correcto
-    salario_bruto = costes["salario_bruto"]
-    tramo_correcto = PriceBracket.get_bracket_for_amount(salario_bruto)
-    if tramo_correcto and tramo_correcto.numero_tramo != 1:
-        # Recalcular con el tramo correcto
-        costes = tramo_correcto.calculate_costs_from_net(
-            importe_neto_liquido,
+    def _resolver_costes(cache_neto_valor):
+        tramo_actual = PriceBracket.get_bracket_for_calculator(
+            cache_neto_valor,
+            num_days=num_dias,
+            n_artistas=cantidad_artistas,
+            porcentaje_empresa_total=porcentaje_empresa_total,
+        )
+        if not tramo_actual:
+            return None, None
+
+        costes_actuales = tramo_actual.calculate_costs(
+            cache_neto_valor,
             irpf_percentage=porcentaje_irpf,
             honorarios_percentage=honorario_artista,
+            num_days=num_dias,
+            n_artistas=cantidad_artistas,
         )
-        tramo = tramo_correcto
+        return tramo_actual, costes_actuales
+
+    minimo_cache = Decimal("0.01")
+    tramo_min, costes_min = _resolver_costes(minimo_cache)
+    if not tramo_min or not costes_min:
+        return JsonResponse({"ok": False, "error": "No existe un tramo activo para ese cálculo."}, status=404)
+
+    if costes_min["neto_total"] >= importe_neto_objetivo:
+        tramo = tramo_min
+        costes = costes_min
+    else:
+        cache_bajo = minimo_cache
+        cache_alto = max(importe_neto_objetivo * Decimal("2"), Decimal("10"))
+        tramo = None
+        costes = None
+
+        for _ in range(30):
+            tramo_alto, costes_alto = _resolver_costes(cache_alto)
+            if not tramo_alto or not costes_alto:
+                return JsonResponse({"ok": False, "error": "No existe un tramo activo para ese cálculo."}, status=404)
+
+            if costes_alto["neto_total"] >= importe_neto_objetivo:
+                tramo = tramo_alto
+                costes = costes_alto
+                break
+
+            cache_alto *= Decimal("2")
+
+        if not tramo or not costes:
+            return JsonResponse(
+                {"ok": False, "error": "No se pudo encontrar un caché neto para el neto total indicado."},
+                status=400,
+            )
+
+        for _ in range(70):
+            cache_medio = (cache_bajo + cache_alto) / Decimal("2")
+            tramo_medio, costes_medio = _resolver_costes(cache_medio)
+            if not tramo_medio or not costes_medio:
+                continue
+
+            if costes_medio["neto_total"] < importe_neto_objetivo:
+                cache_bajo = cache_medio
+            else:
+                cache_alto = cache_medio
+                tramo = tramo_medio
+                costes = costes_medio
+
+            if (cache_alto - cache_bajo) < Decimal("0.0001"):
+                break
+
+    if not tramo or not costes:
+        return JsonResponse(
+            {"ok": False, "error": "No se pudo resolver el cálculo inverso para ese neto total."},
+            status=400,
+        )
 
     base_cotizacion = costes["base_cotizacion"]
     salario_bruto = costes["salario_bruto"]
@@ -363,24 +452,7 @@ def calcular_costes_desde_neto(request):
         + porcentajes.formacion_trabajador
     )
 
-    cantidad_artistas = Decimal("1")
-    if contexto_calculo == "agrupacion" and tipo_registro == ArtistRecord.RegistrationType.BAND and agrupacion_id:
-        try:
-            agrupacion = Grouping.objects.filter(pk=agrupacion_id).first()
-            if agrupacion:
-                total = agrupacion.artistas.count()
-                if total > 0:
-                    cantidad_artistas = Decimal(total)
-        except Exception:
-            cantidad_artistas = Decimal("1")
-
-    cache_net = costes["cache_net"]
-    importe_bruto = costes["importe_bruto"]
-    importe_total_empresa = costes["importe_total_empresa"]
-
-    iva_porcentaje = Decimal("21")
-    iva_importe = (importe_total_empresa * iva_porcentaje) / Decimal("100")
-    total_con_iva = importe_total_empresa + iva_importe
+    neto_por_artista = costes["neto"]
 
     return JsonResponse(
         {
@@ -388,21 +460,24 @@ def calcular_costes_desde_neto(request):
             "tramo": tramo.numero_tramo,
             "rango": f"{tramo.rango_minimo} - {tramo.rango_maximo}",
             "resumen": {
-                "neto_liquido": f"{importe_neto_liquido:.2f}",
-                "importe_bruto": f"{importe_bruto:.2f}",
-                "cache_neto": f"{cache_net:.2f}",
-                "importe_total_empresa": f"{importe_total_empresa:.2f}",
-                "iva_porcentaje": f"{iva_porcentaje:.2f}",
-                "iva_importe": f"{iva_importe:.2f}",
-                "total_con_iva": f"{total_con_iva:.2f}",
+                "neto_objetivo_total": f"{importe_neto_objetivo:.2f}",
+                "importe_bruto": f"{costes['importe_bruto']:.2f}",
+                "base_imponible": f"{costes['base_imponible']:.2f}",
+                "num_dias": f"{num_dias:.0f}",
+                "iva_porcentaje": f"{costes['iva_porcentaje']:.2f}",
+                "iva_importe": f"{costes['iva_importe']:.2f}",
+                "total_con_iva": f"{costes['total_con_iva']:.2f}",
                 "porcentaje_ss_total": f"{porcentaje_ss_total:.4f}",
                 "porcentaje_irpf": f"{(porcentaje_irpf or Decimal('0')):.4f}",
                 "porcentaje_honorarios": f"{costes['porcentaje_honorarios_aplicado']:.4f}",
                 "presupuesto_nomina": f"{costes['presupuesto_nomina']:.2f}",
                 "coste_ss_empresa": f"{costes['coste_empresa']:.2f}",
                 "salario_bruto": f"{salario_bruto:.2f}",
+                "base_diaria_estimada": f"{costes['base_diaria_estimada']:.2f}",
+                "base_cotizacion_diaria": f"{costes['base_cotizacion_diaria']:.2f}",
                 "base_cotizacion": f"{base_cotizacion:.2f}",
                 "coste_ss_trabajador": f"{costes['coste_seguridad_social']:.2f}",
+                "coste_ss_total": f"{costes['coste_ss_total']:.2f}",
                 "base_irpf": f"{costes['base_irpf']:.2f}",
                 "detalle_ss": {
                     key: {
@@ -411,9 +486,9 @@ def calcular_costes_desde_neto(request):
                     }
                     for key, value in detalle_ss.items()
                 },
-                "neto_por_artista": f"{costes['neto']:.2f}",
+                "neto_por_artista": f"{neto_por_artista:.2f}",
                 "cantidad_artistas": f"{cantidad_artistas:.0f}",
-                "neto_total": f"{(costes['neto'] * cantidad_artistas):.2f}",
+                "neto_total": f"{costes['neto_total']:.2f}",
             },
             "costes": {
                 "coste_empresa": f"{costes['coste_ss_total']:.2f}",
@@ -642,7 +717,7 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
         if date_to:
             queryset = queryset.filter(fecha_alta__lte=date_to)
 
-        return queryset
+        return queryset.order_by("-fecha_alta", "-creado_en")
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -796,6 +871,14 @@ class ArtistRecordCreateView(LoginRequiredMixin, CreateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["ruta_actual"] = self.request.get_full_path()
+        context["artists_payload"] = [
+            {
+                "id": artist.pk,
+                "irpf": str(artist.irpf),
+                "honorario": "" if artist.honorario is None else str(artist.honorario),
+            }
+            for artist in Artist.objects.order_by("nombre_completo")
+        ]
         return context
 
 
@@ -808,6 +891,14 @@ class ArtistRecordUpdateView(LoginRequiredMixin, UpdateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context["ruta_actual"] = self.request.get_full_path()
+        context["artists_payload"] = [
+            {
+                "id": artist.pk,
+                "irpf": str(artist.irpf),
+                "honorario": "" if artist.honorario is None else str(artist.honorario),
+            }
+            for artist in Artist.objects.order_by("nombre_completo")
+        ]
         return context
 
 
@@ -816,8 +907,32 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
     form_class = GroupingRecordBatchForm
     success_url = reverse_lazy("artists:record-list")
 
+    def _get_standby_batch(self):
+        batch_id = (self.request.POST.get("batch_id") or self.request.GET.get("batch") or "").strip()
+        if not batch_id:
+            return None
+        return GroupingRecordBatch.objects.filter(
+            pk=batch_id,
+            estado=GroupingRecordBatch.BatchStatus.STANDBY,
+        ).select_related("agrupacion").first()
+
     def get_initial(self):
         initial = super().get_initial()
+        standby_batch = self._get_standby_batch()
+        if standby_batch:
+            initial.update(
+                {
+                    "agrupacion": standby_batch.agrupacion_id,
+                    "lineas": json.dumps(standby_batch.lineas or []),
+                    "fecha_alta": standby_batch.fecha_alta,
+                    "fecha_baja": standby_batch.fecha_baja,
+                    "proceso_cancelado": standby_batch.proceso_cancelado,
+                    "estado_pago": standby_batch.estado_pago,
+                    "observaciones": standby_batch.observaciones,
+                }
+            )
+            return initial
+
         agrupacion_id = self.request.GET.get("agrupacion", "").strip()
         if agrupacion_id:
             grouping = Grouping.objects.filter(pk=agrupacion_id).prefetch_related("artistas").first()
@@ -841,59 +956,290 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
         context = super().get_context_data(**kwargs)
         context["artists_catalog"] = Artist.objects.order_by("nombre_completo")
         context["form_mode"] = "create"
+        context["standby_batch"] = self._get_standby_batch()
         return context
+
+    @staticmethod
+    def _create_artist_records(cleaned, lineas, batch=None):
+        created = 0
+        for item in lineas:
+            artist = item["artista"]
+            record = ArtistRecord(
+                artista=artist,
+                agrupacion=cleaned["agrupacion"],
+                lote_agrupacion=batch,
+                tipo_registro=ArtistRecord.RegistrationType.BAND,
+                es_autonomo=item["es_autonomo"],
+                tipo_irpf=artist.irpf,
+                fecha_alta=cleaned["fecha_alta"],
+                fecha_baja=cleaned.get("fecha_baja"),
+                solicitud_a1=item["solicitud_a1"],
+                destino_a1=item["destino_a1"],
+                proceso_cancelado=cleaned["proceso_cancelado"],
+                cache_neto=item["cache_neto"],
+                estado_pago=cleaned["estado_pago"],
+                observaciones=cleaned.get("observaciones", ""),
+            )
+            record.full_clean()
+            record.calculate_and_update_costs()
+            record.save()
+            created += 1
+        return created
 
     def form_valid(self, form):
         cleaned = form.cleaned_data
         lineas = cleaned.get("lineas_normalizadas", [])
+        submit_action = self.request.POST.get("submit_action", "generate")
+        standby_batch = self._get_standby_batch()
 
-        with transaction.atomic():
-            created = 0
-            for item in lineas:
-                artist = item["artista"]
-                record = ArtistRecord(
-                    artista=artist,
-                    agrupacion=cleaned["agrupacion"],
-                    tipo_registro=ArtistRecord.RegistrationType.BAND,
-                    es_autonomo=item["es_autonomo"],
-                    tipo_irpf=artist.irpf,
-                    fecha_alta=cleaned["fecha_alta"],
-                    fecha_baja=cleaned.get("fecha_baja"),
-                    solicitud_a1=item["solicitud_a1"],
-                    destino_a1=item["destino_a1"],
-                    proceso_cancelado=cleaned["proceso_cancelado"],
-                    cache_neto=item["cache_neto"],
-                    estado_pago=cleaned["estado_pago"],
-                    observaciones=cleaned.get("observaciones", ""),
-                )
-                record.calculate_and_update_costs()
-                record.save()
-                created += 1
+        serialized_lineas = [
+            {
+                "artista_id": item["artista"].pk,
+                "cache_neto": str(item["cache_neto"]),
+                "es_autonomo": item["es_autonomo"],
+                "solicitud_a1": item["solicitud_a1"],
+                "destino_a1": item["destino_a1"],
+            }
+            for item in lineas
+        ]
+
+        if submit_action == "standby":
+            with transaction.atomic():
+                if standby_batch:
+                    standby_batch.agrupacion = cleaned["agrupacion"]
+                    standby_batch.lineas = serialized_lineas
+                    standby_batch.fecha_alta = cleaned["fecha_alta"]
+                    standby_batch.fecha_baja = cleaned.get("fecha_baja")
+                    standby_batch.proceso_cancelado = cleaned["proceso_cancelado"]
+                    standby_batch.estado_pago = cleaned["estado_pago"]
+                    standby_batch.observaciones = cleaned.get("observaciones", "")
+                    standby_batch.save()
+                else:
+                    GroupingRecordBatch.objects.create(
+                        agrupacion=cleaned["agrupacion"],
+                        lineas=serialized_lineas,
+                        fecha_alta=cleaned["fecha_alta"],
+                        fecha_baja=cleaned.get("fecha_baja"),
+                        proceso_cancelado=cleaned["proceso_cancelado"],
+                        estado_pago=cleaned["estado_pago"],
+                        observaciones=cleaned.get("observaciones", ""),
+                        estado=GroupingRecordBatch.BatchStatus.STANDBY,
+                    )
+
+            if standby_batch:
+                messages.success(self.request, "Stand By actualizado correctamente.")
+            else:
+                messages.success(self.request, "Registro guardado en Stand By. Podras pasarlo a registros cuando quieras.")
+            return redirect("artists:record-grouping-list")
+
+        try:
+            with transaction.atomic():
+                batch_for_records = standby_batch
+                if batch_for_records is None:
+                    batch_for_records = GroupingRecordBatch.objects.create(
+                        agrupacion=cleaned["agrupacion"],
+                        lineas=serialized_lineas,
+                        fecha_alta=cleaned["fecha_alta"],
+                        fecha_baja=cleaned.get("fecha_baja"),
+                        proceso_cancelado=cleaned["proceso_cancelado"],
+                        estado_pago=cleaned["estado_pago"],
+                        observaciones=cleaned.get("observaciones", ""),
+                        estado=GroupingRecordBatch.BatchStatus.PROCESSED,
+                        generado_en=timezone.now(),
+                    )
+
+                created = self._create_artist_records(cleaned, lineas, batch=batch_for_records)
+
+                if standby_batch:
+                    standby_batch.agrupacion = cleaned["agrupacion"]
+                    standby_batch.lineas = serialized_lineas
+                    standby_batch.fecha_alta = cleaned["fecha_alta"]
+                    standby_batch.fecha_baja = cleaned.get("fecha_baja")
+                    standby_batch.proceso_cancelado = cleaned["proceso_cancelado"]
+                    standby_batch.estado_pago = cleaned["estado_pago"]
+                    standby_batch.observaciones = cleaned.get("observaciones", "")
+                    standby_batch.estado = GroupingRecordBatch.BatchStatus.PROCESSED
+                    standby_batch.generado_en = timezone.now()
+                    standby_batch.save()
+        except ValidationError as exc:
+            if hasattr(exc, "error_dict"):
+                for field_name, errors in exc.error_dict.items():
+                    for error in errors:
+                        target_field = field_name if field_name in form.fields else None
+                        form.add_error(target_field, error)
+            else:
+                form.add_error(None, "; ".join(exc.messages))
+            return self.form_invalid(form)
 
         messages.success(self.request, f"Se han creado {created} registros para la agrupación seleccionada.")
         return super().form_valid(form)
 
 
+class GroupingRecordBatchProcessStandbyView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        batch = get_object_or_404(
+            GroupingRecordBatch.objects.select_related("agrupacion"),
+            pk=pk,
+            estado=GroupingRecordBatch.BatchStatus.STANDBY,
+        )
+
+        lineas_raw = batch.lineas if isinstance(batch.lineas, list) else []
+        if not lineas_raw:
+            messages.error(request, "El registro en Stand By no contiene lineas para generar registros.")
+            return redirect("artists:record-grouping-list")
+
+        artist_ids = [str((item or {}).get("artista_id", "")).strip() for item in lineas_raw if isinstance(item, dict)]
+        artists_map = {str(artist.pk): artist for artist in Artist.objects.filter(pk__in=artist_ids)}
+
+        if len(artists_map) != len(set([artist_id for artist_id in artist_ids if artist_id])):
+            messages.error(
+                request,
+                "No se pudo procesar el Stand By porque hay artistas eliminados o no validos.",
+            )
+            return redirect("artists:record-grouping-list")
+
+        lineas_normalizadas = []
+        for item in lineas_raw:
+            artist_id = str((item or {}).get("artista_id", "")).strip()
+            if not artist_id:
+                continue
+
+            try:
+                cache_neto = Decimal(str((item or {}).get("cache_neto", "0")).replace(",", "."))
+            except (InvalidOperation, TypeError):
+                messages.error(request, "No se pudo procesar el Stand By porque algun caché neto no es valido.")
+                return redirect("artists:record-grouping-list")
+
+            if cache_neto <= 0:
+                messages.error(request, "No se pudo procesar el Stand By porque hay lineas con caché neto vacio.")
+                return redirect("artists:record-grouping-list")
+
+            lineas_normalizadas.append(
+                {
+                    "artista": artists_map[artist_id],
+                    "cache_neto": cache_neto,
+                    "es_autonomo": bool((item or {}).get("es_autonomo", False)),
+                    "solicitud_a1": bool((item or {}).get("solicitud_a1", False)),
+                    "destino_a1": str((item or {}).get("destino_a1", "")).strip(),
+                }
+            )
+
+        cleaned = {
+            "agrupacion": batch.agrupacion,
+            "fecha_alta": batch.fecha_alta,
+            "fecha_baja": batch.fecha_baja,
+            "proceso_cancelado": batch.proceso_cancelado,
+            "estado_pago": batch.estado_pago,
+            "observaciones": batch.observaciones,
+        }
+
+        try:
+            with transaction.atomic():
+                created = GroupingRecordBatchCreateView._create_artist_records(cleaned, lineas_normalizadas, batch=batch)
+                batch.estado = GroupingRecordBatch.BatchStatus.PROCESSED
+                batch.generado_en = timezone.now()
+                batch.save(update_fields=["estado", "generado_en", "actualizado_en"])
+        except ValidationError as exc:
+            messages.error(
+                request,
+                "No se pudo procesar el Stand By por solape de fechas o registro abierto. "
+                + "; ".join(exc.messages),
+            )
+            return redirect("artists:record-grouping-list")
+
+        messages.success(request, f"Stand By procesado correctamente. Se han creado {created} registros.")
+        return redirect("artists:record-grouping-list")
+
+
+class GroupingRecordBatchDeleteView(LoginRequiredMixin, View):
+    def post(self, request, pk):
+        batch = get_object_or_404(GroupingRecordBatch, pk=pk)
+        batch.delete()
+        messages.success(request, "Registro de agrupación eliminado correctamente.")
+        return redirect("artists:record-grouping-list")
+
+
 class GroupingRecordListView(LoginRequiredMixin, ListView):
-    model = Grouping
+    model = GroupingRecordBatch
     template_name = "artists/grouping_record_list.html"
-    context_object_name = "groupings"
+    context_object_name = "batch_records"
 
     def get_queryset(self):
         return (
-            Grouping.objects
-            .prefetch_related("artistas")
-            .annotate(
-                total_artistas=Count("artistas", distinct=True),
-                total_registros=Count(
-                    "registros_artistas",
-                    filter=~Q(registros_artistas__estado_pago=ArtistRecord.PaymentStatus.PAID),
-                    distinct=True,
-                ),
-                ultima_alta=Max("registros_artistas__fecha_alta"),
-            )
-            .order_by("nombre")
+            GroupingRecordBatch.objects
+            .select_related("agrupacion")
+            .order_by("-fecha_alta", "-creado_en")
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        batches = context.get("batch_records")
+
+        artist_ids = set()
+        for batch in batches:
+            lineas = batch.lineas if isinstance(batch.lineas, list) else []
+            batch.total_lineas = len(lineas)
+            for item in lineas:
+                if not isinstance(item, dict):
+                    continue
+                artist_id = str(item.get("artista_id", "")).strip()
+                if artist_id:
+                    artist_ids.add(artist_id)
+
+        artists_map = {str(artist.pk): artist for artist in Artist.objects.filter(pk__in=artist_ids)}
+
+        for batch in batches:
+            lineas = batch.lineas if isinstance(batch.lineas, list) else []
+            artist_names = []
+            for item in lineas:
+                if not isinstance(item, dict):
+                    continue
+                artist_id = str(item.get("artista_id", "")).strip()
+                artist = artists_map.get(artist_id)
+                if artist:
+                    artist_names.append(artist.nombre_completo)
+            batch.artist_names = artist_names
+
+        return context
+
+
+class GroupingRecordBatchDetailView(LoginRequiredMixin, TemplateView):
+    template_name = "artists/grouping_record_detail.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        batch = get_object_or_404(
+            GroupingRecordBatch.objects.select_related("agrupacion"),
+            pk=self.kwargs["pk"],
+        )
+
+        lineas = batch.lineas if isinstance(batch.lineas, list) else []
+        artist_ids = [
+            str(item.get("artista_id", "")).strip()
+            for item in lineas
+            if isinstance(item, dict)
+        ]
+        artists_map = {str(artist.pk): artist for artist in Artist.objects.filter(pk__in=artist_ids)}
+
+        lineas_detalle = []
+        for item in lineas:
+            if not isinstance(item, dict):
+                continue
+            artist_id = str(item.get("artista_id", "")).strip()
+            artist = artists_map.get(artist_id)
+            lineas_detalle.append(
+                {
+                    "artista_nombre": artist.nombre_completo if artist else f"Artista #{artist_id}",
+                    "cache_neto": item.get("cache_neto", ""),
+                    "es_autonomo": bool(item.get("es_autonomo", False)),
+                    "solicitud_a1": bool(item.get("solicitud_a1", False)),
+                    "destino_a1": (item.get("destino_a1", "") or "").strip(),
+                }
+            )
+
+        context["batch"] = batch
+        context["lineas_detalle"] = lineas_detalle
+        return context
 
 
 class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
@@ -904,7 +1250,7 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
     def get_grouping(self):
         return Grouping.objects.prefetch_related("artistas").get(pk=self.kwargs["pk"])
 
-    def get_editable_records(self):
+    def get_latest_records(self):
         records = (
             ArtistRecord.objects
             .filter(agrupacion_id=self.kwargs["pk"])
@@ -912,19 +1258,19 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
             .select_related("artista", "agrupacion")
             .order_by("artista_id", "-fecha_alta", "-creado_en")
         )
-        editable = {}
+        latest = {}
         for record in records:
-            editable.setdefault(record.artista_id, record)
-        return editable
+            latest.setdefault(record.artista_id, record)
+        return latest
 
     def get_initial(self):
         initial = super().get_initial()
         grouping = self.get_grouping()
-        editable_map = self.get_editable_records()
+        latest_map = self.get_latest_records()
 
         initial["agrupacion"] = grouping.pk
-        if editable_map:
-            latest_record = max(editable_map.values(), key=lambda record: (record.fecha_alta, record.creado_en))
+        if latest_map:
+            latest_record = max(latest_map.values(), key=lambda record: (record.fecha_alta, record.creado_en))
             initial.update(
                 {
                     "fecha_alta": latest_record.fecha_alta,
@@ -942,7 +1288,7 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
                     "solicitud_a1": record.solicitud_a1,
                     "destino_a1": record.destino_a1 or "",
                 }
-                for record in sorted(editable_map.values(), key=lambda record: record.artista.nombre_completo)
+                for record in sorted(latest_map.values(), key=lambda record: record.artista.nombre_completo)
             ]
         else:
             lineas = [
@@ -968,46 +1314,45 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
     def form_valid(self, form):
         cleaned = form.cleaned_data
         lineas = cleaned.get("lineas_normalizadas", [])
-        editable_map = self.get_editable_records()
-        selected_ids = {item["artista"].pk for item in lineas}
 
-        with transaction.atomic():
-            updated = 0
-            created = 0
+        serialized_lineas = [
+            {
+                "artista_id": item["artista"].pk,
+                "cache_neto": str(item["cache_neto"]),
+                "es_autonomo": item["es_autonomo"],
+                "solicitud_a1": item["solicitud_a1"],
+                "destino_a1": item["destino_a1"],
+            }
+            for item in lineas
+        ]
 
-            for item in lineas:
-                artist = item["artista"]
-                record = editable_map.get(artist.pk)
-                if record is None:
-                    record = ArtistRecord(
-                        artista=artist,
-                        agrupacion=cleaned["agrupacion"],
-                        tipo_registro=ArtistRecord.RegistrationType.BAND,
-                    )
-                    created += 1
-                else:
-                    updated += 1
-
-                record.es_autonomo = item["es_autonomo"]
-                record.tipo_irpf = artist.irpf
-                record.fecha_alta = cleaned["fecha_alta"]
-                record.fecha_baja = cleaned.get("fecha_baja")
-                record.solicitud_a1 = item["solicitud_a1"]
-                record.destino_a1 = item["destino_a1"]
-                record.proceso_cancelado = cleaned["proceso_cancelado"]
-                record.cache_neto = item["cache_neto"]
-                record.estado_pago = cleaned["estado_pago"]
-                record.observaciones = cleaned.get("observaciones", "")
-                record.calculate_and_update_costs()
-                record.save()
-
-            for artist_id, record in editable_map.items():
-                if artist_id not in selected_ids:
-                    record.delete()
+        try:
+            with transaction.atomic():
+                GroupingRecordBatch.objects.create(
+                    agrupacion=cleaned["agrupacion"],
+                    lineas=serialized_lineas,
+                    fecha_alta=cleaned["fecha_alta"],
+                    fecha_baja=cleaned.get("fecha_baja"),
+                    proceso_cancelado=cleaned["proceso_cancelado"],
+                    estado_pago=cleaned["estado_pago"],
+                    observaciones=cleaned.get("observaciones", ""),
+                    estado=GroupingRecordBatch.BatchStatus.PROCESSED,
+                    generado_en=timezone.now(),
+                )
+                created = GroupingRecordBatchCreateView._create_artist_records(cleaned, lineas)
+        except ValidationError as exc:
+            if hasattr(exc, "error_dict"):
+                for field_name, errors in exc.error_dict.items():
+                    for error in errors:
+                        target_field = field_name if field_name in form.fields else None
+                        form.add_error(target_field, error)
+            else:
+                form.add_error(None, "; ".join(exc.messages))
+            return self.form_invalid(form)
 
         messages.success(
             self.request,
-            f"Agrupación actualizada: {updated} registros actualizados y {created} creados.",
+            f"Nueva alta registrada para la agrupación: {created} registros creados.",
         )
         return super().form_valid(form)
 
@@ -1022,6 +1367,16 @@ class ArtistRecordDeleteView(LoginRequiredMixin, DeleteView):
     model = ArtistRecord
     template_name = "artists/artist_record_confirm_delete.html"
     success_url = reverse_lazy("artists:record-list")
+
+    def delete(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        batch = self.object.lote_agrupacion
+        response = super().delete(request, *args, **kwargs)
+
+        if batch and not batch.registros_creados.exists():
+            batch.delete()
+
+        return response
 
 
 class GroupingCreateView(LoginRequiredMixin, CreateView):

@@ -29,12 +29,12 @@
 
     <div class="grid-2">
         <div class="field">
-            <label for="calc-irpf">IRPF (%)</label>
-            <input id="calc-irpf" type="number" min="0" step="0.01" placeholder="15.00">
-        </div>
-        <div class="field">
             <label for="calc-cache">Caché neto</label>
             <input id="calc-cache" type="number" min="0.01" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field">
+            <label for="calc-irpf">IRPF (%)</label>
+            <input id="calc-irpf" type="number" min="0" step="0.01" placeholder="2.00">
         </div>
         <div class="field">
             <label for="calc-num-dias">Número de días</label>
@@ -44,13 +44,18 @@
             <label for="calc-n-artistas">Número de artistas</label>
             <input id="calc-n-artistas" type="number" min="1" step="1" placeholder="1" value="1">
         </div>
+        <div class="field">
+            <label for="calc-neto-total">Neto total objetivo</label>
+            <input id="calc-neto-total" type="number" min="0.01" step="0.01" placeholder="0.00">
+        </div>
     </div>
 
     <div class="actions">
-        <button class="button" type="button" id="calc-btn">Calcular</button>
+        <button class="button" type="button" id="calc-btn-direct">Calcular desde caché</button>
+        <button class="button secondary" type="button" id="calc-btn-reverse">Calcular desde neto total</button>
     </div>
 
-    <div id="calc-info" class="info">Completa el caché neto y pulsa Calcular.</div>
+    <div id="calc-info" class="info">Puedes calcular desde caché neto o desde neto total objetivo.</div>
 
     <div class="summary">
         <div class="kpi"><div class="label">Tramo</div><div class="value" id="out-tramo">-</div></div>
@@ -73,7 +78,9 @@
         const cacheInput = document.getElementById("calc-cache");
         const numDiasInput = document.getElementById("calc-num-dias");
         const nArtistasInput = document.getElementById("calc-n-artistas");
-        const calcBtn = document.getElementById("calc-btn");
+        const netoTotalInput = document.getElementById("calc-neto-total");
+        const calcBtnDirect = document.getElementById("calc-btn-direct");
+        const calcBtnReverse = document.getElementById("calc-btn-reverse");
         const info = document.getElementById("calc-info");
 
         const outTramo = document.getElementById("out-tramo");
@@ -101,24 +108,51 @@
             info.classList.toggle("error", Boolean(isError));
         }
 
-        if (!calcBtn) return;
+        function buildBaseParams() {
+            const params = new URLSearchParams();
+            params.set("contexto", "registro");
 
-        calcBtn.addEventListener("click", async function () {
+            const irpf = (irpfInput.value || "").trim();
+            const numDiasVal = Math.max(1, parseInt((numDiasInput.value || "1").trim(), 10) || 1);
+            const nArtistasVal = Math.max(1, parseInt((nArtistasInput.value || "1").trim(), 10) || 1);
+
+            if (irpf) params.set("tipo_irpf", irpf);
+            params.set("num_dias", String(numDiasVal));
+            params.set("n_artistas", String(nArtistasVal));
+
+            return params;
+        }
+
+        function applyResult(data) {
+            outTramo.textContent = data.tramo || "-";
+            outBruto.textContent = formatMoney(data.resumen.importe_bruto);
+            outTotalIva.textContent = formatMoney(data.resumen.total_con_iva);
+            outHonorarios.textContent = formatMoney(data.costes.coste_gestion);
+            outSsTotal.textContent = formatMoney(data.resumen.coste_ss_total);
+            outSsTrab.textContent = formatMoney(data.costes.coste_seguridad_social);
+            outIrpf.textContent = formatMoney(data.costes.coste_irpf);
+            outNetoArtista.textContent = formatMoney(data.resumen.neto_por_artista);
+            outNetoTotal.textContent = formatMoney(data.resumen.neto_total);
+
+            if (cacheInput && data.resumen.base_imponible !== undefined) {
+                cacheInput.value = toNumber(data.resumen.base_imponible).toFixed(2);
+            }
+            if (netoTotalInput && data.resumen.neto_total !== undefined) {
+                netoTotalInput.value = toNumber(data.resumen.neto_total).toFixed(2);
+            }
+        }
+
+        if (!calcBtnDirect || !calcBtnReverse) return;
+
+        calcBtnDirect.addEventListener("click", async function () {
             const cacheNeto = (cacheInput.value || "").trim();
             if (!cacheNeto) {
                 setInfo("Debes indicar un caché neto.", true);
                 return;
             }
 
-            const params = new URLSearchParams();
+            const params = buildBaseParams();
             params.set("cache_neto", cacheNeto);
-            params.set("contexto", "registro");
-
-            const irpf = (irpfInput.value || "").trim();
-            const numDias = (numDiasInput.value || "1").trim();
-
-            if (irpf) params.set("tipo_irpf", irpf);
-            if (numDias) params.set("num_dias", numDias);
 
             try {
                 const response = await fetch("{% url 'artists:calcular-costes' %}?" + params.toString(), {
@@ -131,21 +165,39 @@
                     return;
                 }
 
-                outTramo.textContent = data.tramo || "-";
-                outBruto.textContent = formatMoney(data.resumen.importe_bruto);
-                outTotalIva.textContent = formatMoney(data.resumen.total_con_iva);
-                outHonorarios.textContent = formatMoney(data.costes.coste_gestion);
-                outSsTotal.textContent = formatMoney(data.resumen.coste_ss_total);
-                outSsTrab.textContent = formatMoney(data.costes.coste_seguridad_social);
-                outIrpf.textContent = formatMoney(data.costes.coste_irpf);
-                const nArtistasVal = Math.max(1, parseInt(nArtistasInput.value || "1", 10));
-                const netoArtista = toNumber(data.resumen.neto_por_artista);
-                outNetoArtista.textContent = formatMoney(netoArtista);
-                outNetoTotal.textContent = formatMoney(netoArtista * nArtistasVal);
+                applyResult(data);
 
                 setInfo("Cálculo actualizado con la misma lógica de registros.", false);
             } catch (_error) {
                 setInfo("Error de conexión al calcular costes.", true);
+            }
+        });
+
+        calcBtnReverse.addEventListener("click", async function () {
+            const netoTotal = (netoTotalInput.value || "").trim();
+            if (!netoTotal) {
+                setInfo("Debes indicar un neto total objetivo.", true);
+                return;
+            }
+
+            const params = buildBaseParams();
+            params.set("neto_total", netoTotal);
+
+            try {
+                const response = await fetch("{% url 'artists:calcular-costes-desde-neto' %}?" + params.toString(), {
+                    headers: { "X-Requested-With": "XMLHttpRequest" }
+                });
+                const data = await response.json();
+
+                if (!response.ok || !data.ok) {
+                    setInfo(data.error || "No se pudo calcular desde neto total.", true);
+                    return;
+                }
+
+                applyResult(data);
+                setInfo("Cálculo inverso aplicado: neto total -> caché y costes.", false);
+            } catch (_error) {
+                setInfo("Error de conexión al calcular desde neto total.", true);
             }
         });
     })();

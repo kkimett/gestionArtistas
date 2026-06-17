@@ -86,6 +86,11 @@ legend { font-weight: 700; padding: 0 8px; }
                                 {{ form.tipo_irpf.errors }}
                             </div>
                             <div class="field field-highlight">
+                                <label for="honorario_artista_visual">Honorario artista (%)</label>
+                                <input id="honorario_artista_visual" type="text" readonly>
+                                <div class="meta">Se carga desde la ficha del artista seleccionado.</div>
+                            </div>
+                            <div class="field field-highlight">
                                 <label for="id_es_autonomo">Régimen fiscal</label>
                                 <div class="checkbox-card">
                                     {{ form.es_autonomo }}
@@ -247,6 +252,7 @@ legend { font-weight: 700; padding: 0 8px; }
 {% endblock %}
 
 {% block extra_js %}
+{{ artists_payload|json_script:"artists-payload" }}
 <script>
     (function () {
         const cacheNetoInput = document.getElementById("id_cache_neto");
@@ -255,6 +261,7 @@ legend { font-weight: 700; padding: 0 8px; }
         const costeSeguridadSocialInput = document.getElementById("id_coste_seguridad_social");
         const costeIrpfInput = document.getElementById("id_coste_irpf");
         const tipoIrpfInput = document.getElementById("id_tipo_irpf");
+        const honorarioArtistaVisualInput = document.getElementById("honorario_artista_visual");
         const artistaInput = document.getElementById("id_artista");
         const tipoRegistroInput = document.getElementById("id_tipo_registro");
         const agrupacionInput = document.getElementById("id_agrupacion");
@@ -308,6 +315,9 @@ legend { font-weight: 700; padding: 0 8px; }
         const resumenAtEmpImp = document.getElementById("resumen-at-emp-imp");
         const resumenFogasaPct = document.getElementById("resumen-fogasa-pct");
         const resumenFogasaImp = document.getElementById("resumen-fogasa-imp");
+        const artistsPayloadElement = document.getElementById("artists-payload");
+        const artistsPayload = artistsPayloadElement ? JSON.parse(artistsPayloadElement.textContent) : [];
+        const artistsMap = new Map(artistsPayload.map((artist) => [String(artist.id), artist]));
 
         let detalleSsCache = null;
         let configBackend = { ivaPct: 21, porcentajeIrpf: 0, porcentajeHonorarios: 0 };
@@ -354,6 +364,36 @@ legend { font-weight: 700; padding: 0 8px; }
             destinoA1Input.disabled = !habilitado;
             if (!habilitado) {
                 destinoA1Input.value = "";
+            }
+        }
+
+        function actualizarDatosArtistaSeleccionado() {
+            if (!artistaInput) {
+                return;
+            }
+
+            const artist = artistsMap.get(String(artistaInput.value || ""));
+            if (!artist) {
+                const selectedOption = artistaInput.options[artistaInput.selectedIndex];
+                const irpfFallback = selectedOption?.dataset?.irpf || "";
+                const honorarioFallback = selectedOption?.dataset?.honorario || "";
+                if (tipoIrpfInput) {
+                    tipoIrpfInput.value = irpfFallback;
+                }
+                if (honorarioArtistaVisualInput) {
+                    honorarioArtistaVisualInput.value = honorarioFallback ? `${honorarioFallback}%` : "";
+                }
+                return;
+            }
+
+            if (tipoIrpfInput) {
+                tipoIrpfInput.value = artist.irpf || "";
+            }
+            if (honorarioArtistaVisualInput) {
+                honorarioArtistaVisualInput.value = artist.honorario ? `${artist.honorario}%` : "General";
+            }
+            if (resumenHonorariosPct) {
+                resumenHonorariosPct.textContent = formatPercent(artist.honorario || 0, 2);
             }
         }
 
@@ -536,7 +576,10 @@ legend { font-weight: 700; padding: 0 8px; }
             tipoIrpfInput.addEventListener("blur", calcularCostes);
         }
         if (artistaInput) {
-            artistaInput.addEventListener("change", calcularCostes);
+            artistaInput.addEventListener("change", function () {
+                actualizarDatosArtistaSeleccionado();
+                calcularCostes();
+            });
         }
         if (tipoRegistroInput) {
             tipoRegistroInput.addEventListener("change", calcularCostes);
@@ -561,6 +604,7 @@ legend { font-weight: 700; padding: 0 8px; }
         });
 
         actualizarDestinoA1();
+        actualizarDatosArtistaSeleccionado();
         actualizarPendiente();
         actualizarResumenDesdeCampos();
         // Si es edición (ya hay cache_neto), recalcular desde el backend al cargar

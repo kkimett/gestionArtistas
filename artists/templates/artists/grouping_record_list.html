@@ -32,46 +32,67 @@ th { background: #f9fafb; }
     </div>
 </div>
 
-{% if groupings %}
+{% if batch_records %}
 <div class="table-wrap">
     <table>
         <thead>
             <tr>
                 <th>Agrupación</th>
+                <th>Fecha alta</th>
+                <th>Fecha baja</th>
                 <th>Artistas</th>
-                <th>Registros activos</th>
-                <th>Última alta</th>
+                <th>Estado</th>
+                <th>Generado</th>
                 <th>Acciones</th>
             </tr>
         </thead>
         <tbody>
-            {% for grouping in groupings %}
+            {% for batch in batch_records %}
             <tr>
                 <td>
                     <div class="meta-block">
-                        <strong>{{ grouping.nombre }}</strong>
-                        {% if grouping.descripcion %}
-                        <span class="meta">{{ grouping.descripcion }}</span>
+                        <strong>{{ batch.agrupacion.nombre }}</strong>
+                        {% if batch.agrupacion.descripcion %}
+                        <span class="meta">{{ batch.agrupacion.descripcion }}</span>
                         {% endif %}
                     </div>
                 </td>
+                <td>{{ batch.fecha_alta|date:"d/m/Y" }}</td>
+                <td>{{ batch.fecha_baja|date:"d/m/Y"|default:"-" }}</td>
                 <td>
-                    {% if grouping.total_artistas %}
+                    {% if batch.artist_names %}
                     <ul class="artist-list">
-                        {% for artist in grouping.artistas.all %}
-                        <li>{{ artist.nombre_completo }}</li>
+                        {% for artist_name in batch.artist_names %}
+                        <li>{{ artist_name }}</li>
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <span class="meta">Sin artistas</span>
+                    <span class="meta">{{ batch.total_lineas }} artista(s)</span>
                     {% endif %}
                 </td>
-                <td>{{ grouping.total_registros }}</td>
-                <td>{{ grouping.ultima_alta|default:"-" }}</td>
+                <td>
+                    {% if batch.estado == 'STANDBY' %}
+                    <span class="meta">Stand By (pendiente)</span>
+                    {% else %}
+                    <span class="meta">Registrado</span>
+                    {% endif %}
+                </td>
+                <td>{{ batch.generado_en|date:"d/m/Y H:i"|default:"-" }}</td>
                 <td>
                     <div class="actions">
-                        <a class="button secondary" href="{% url 'artists:record-grouping-update' grouping.pk %}">Editar</a>
-                        <a class="button secondary" href="{% url 'artists:grouping-record-create' %}?agrupacion={{ grouping.pk }}">Nuevo desde agrupación</a>
+                        {% if batch.estado == 'STANDBY' %}
+                        <a class="button secondary" href="{% url 'artists:grouping-record-create' %}?batch={{ batch.pk }}">Abrir</a>
+                        <form method="post" action="{% url 'artists:record-grouping-standby-process' batch.pk %}">
+                            {% csrf_token %}
+                            <button type="submit" class="button secondary">Pasar a registros</button>
+                        </form>
+                        <form method="post" action="{% url 'artists:record-grouping-delete' batch.pk %}" onsubmit="return confirm('¿Seguro que quieres borrar este registro de agrupación?');">
+                            {% csrf_token %}
+                            <button type="submit" class="button danger">Borrar</button>
+                        </form>
+                        {% else %}
+                        <a class="button secondary" href="{% url 'artists:record-grouping-detail' batch.pk %}">Ver</a>
+                        {% endif %}
                     </div>
                 </td>
             </tr>
@@ -80,6 +101,6 @@ th { background: #f9fafb; }
     </table>
 </div>
 {% else %}
-<p class="meta">No hay agrupaciones disponibles.</p>
+<p class="meta">No hay registros de agrupaciones todavía.</p>
 {% endif %}
 {% endblock %}

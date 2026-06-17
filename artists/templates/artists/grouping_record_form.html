@@ -48,6 +48,9 @@ th { background: #f9fafb; }
 
 <form method="post" class="layout">
     {% csrf_token %}
+    {% if standby_batch %}
+    <input type="hidden" name="batch_id" value="{{ standby_batch.pk }}">
+    {% endif %}
 
     <div class="panel-box">
         {% if form.non_field_errors %}
@@ -133,7 +136,12 @@ th { background: #f9fafb; }
 
         <div class="actions">
             <button class="button secondary" type="button" id="calcular-btn">Calcular costes</button>
-            <button class="button" type="submit">{% if form_mode == "edit" %}Guardar cambios{% else %}Generar registros{% endif %}</button>
+            {% if form_mode == "edit" %}
+            <button class="button" type="submit">Guardar cambios</button>
+            {% else %}
+            <button class="button secondary" type="submit" name="submit_action" value="standby">Guardar para generar mas tarde</button>
+            <button class="button" type="submit" name="submit_action" value="generate">Generar registros</button>
+            {% endif %}
         </div>
     </div>
 
