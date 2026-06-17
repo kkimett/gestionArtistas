@@ -148,6 +148,8 @@ class ArtistRecordAdmin(admin.ModelAdmin):
         "importe_pendiente",
         "estado_pago",
         "agrupacion",
+        "estado_seguridad_social",
+        "estado_facturacion",
     )
     list_filter = ("tipo_registro", "estado_pago", "es_autonomo", "agrupacion")
     search_fields = ("artista__nombre_completo", "artista__dni_nie", "artista__numero_seguridad_social")

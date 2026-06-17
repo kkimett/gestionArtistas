@@ -319,25 +319,23 @@ class Artist(models.Model):
     def __str__(self):
         return self.nombre_completo
 
-
 class GroupingRecordBatch(models.Model):
     class BatchStatus(models.TextChoices):
-        STANDBY = "STANDBY", "Stand By"
+        STANDBY = "STANDBY", "Presupuesto"
         PROCESSED = "PROCESSED", "Procesado"
 
     class PaymentStatus(models.TextChoices):
-        PAID = "PAID", "Pagado"
-        PENDING_INVOICE = "PENDING_INVOICE", "Pendiente pago"
-        IN_PROGRESS = "IN_PROGRESS", "En Proceso"
-        PARTIAL = "PARTIAL", "Pago a Medias"
-        CANCELLED = "CANCELLED", "Anulado"
+        ABONADO = "ABONADO", "Abonado"
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        A_MEDIAS = "A_MEDIAS", "A medias"
+        ADELANTO = "ADELANTO", "Adelanto"
 
     agrupacion = models.ForeignKey(Grouping, on_delete=models.CASCADE, related_name="lotes_registros")
     lineas = models.JSONField(default=list)
     fecha_alta = models.DateField()
     fecha_baja = models.DateField(null=True, blank=True)
     proceso_cancelado = models.BooleanField(default=False)
-    estado_pago = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.IN_PROGRESS)
+    estado_pago = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDIENTE)
     observaciones = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=BatchStatus.choices, default=BatchStatus.STANDBY)
     generado_en = models.DateTimeField(null=True, blank=True)
@@ -360,11 +358,22 @@ class ArtistRecord(models.Model):
         BAND = "BAND", "Banda"
 
     class PaymentStatus(models.TextChoices):
-        PAID = "PAID", "Pagado"
-        PENDING_INVOICE = "PENDING_INVOICE", "Pendiente pago"
-        IN_PROGRESS = "IN_PROGRESS", "En Proceso"
-        PARTIAL = "PARTIAL", "Pago a Medias"
-        CANCELLED = "CANCELLED", "Anulado"
+        ABONADO = "ABONADO", "Abonado"
+        PENDIENTE = "PENDIENTE", "Pendiente"
+        A_MEDIAS = "A_MEDIAS", "A medias"
+        ADELANTO = "ADELANTO", "Adelanto"
+
+    class SeguridadSocialStatus(models.TextChoices):
+        PENDING = 'PENDING', "Pendiente"
+        DONE = 'DONE', "Realizadas"
+        SENT = 'SENT', "Enviadas"
+        CANCELLED = 'CANCELLED', "Canceladas"
+        
+    class FacturacionStatus(models.TextChoices):
+        PENDING = 'PENDING', "Pendiente"
+        DONE = 'DONE', "Realizadas"
+        COLLECTED = 'COLLECTED', "Cobradas"
+        PAID = 'PAID', "Pagadas"
 
     artista = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name="registros")
     es_autonomo = models.BooleanField(default=False)
@@ -389,7 +398,9 @@ class ArtistRecord(models.Model):
     coste_seguridad_social = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     coste_irpf = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     importe_entregado = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    estado_pago = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.IN_PROGRESS)
+    estado_pago = models.CharField(max_length=20, choices=PaymentStatus.choices, default=PaymentStatus.PENDIENTE)
+    estado_seguridad_social = models.CharField(max_length=20, choices=SeguridadSocialStatus.choices, default=SeguridadSocialStatus.PENDING)
+    estado_facturacion = models.CharField(max_length=20, choices=FacturacionStatus.choices, default=FacturacionStatus.PENDING)
     observaciones = models.TextField(blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)

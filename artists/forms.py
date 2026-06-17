@@ -130,6 +130,8 @@ class ArtistRecordForm(forms.ModelForm):
         "coste_irpf",
         "importe_entregado",
         "estado_pago",
+        "estado_seguridad_social",
+        "estado_facturacion",
         "observaciones",
     ]
 
@@ -153,6 +155,8 @@ class ArtistRecordForm(forms.ModelForm):
             "coste_irpf",
             "importe_entregado",
             "estado_pago",
+            "estado_seguridad_social",
+            "estado_facturacion",
             "observaciones",
         ]
         widgets = {
@@ -196,6 +200,8 @@ class ArtistRecordForm(forms.ModelForm):
             cleaned_data["destino_a1"] = ""
 
         estado_pago = cleaned_data.get("estado_pago")
+        estado_seguridad_social = cleaned_data.get("estado_seguridad_social")
+        estado_facturacion = cleaned_data.get("estado_facturacion")
         importe_entregado = cleaned_data.get("importe_entregado")
         neto_para_pago = (cleaned_data.get("cache_neto") or 0) - (
             (cleaned_data.get("coste_empresa") or 0)
@@ -204,9 +210,9 @@ class ArtistRecordForm(forms.ModelForm):
             + (cleaned_data.get("coste_irpf") or 0)
         )
 
-        if estado_pago == ArtistRecord.PaymentStatus.PARTIAL:
+        if estado_pago == ArtistRecord.PaymentStatus.A_MEDIAS:
             if importe_entregado is None or importe_entregado <= 0:
-                self.add_error("importe_entregado", "Indica el importe entregado cuando el estado es Pago a Medias.")
+                self.add_error("importe_entregado", "Indica el importe entregado cuando el estado es A medias.")
             elif importe_entregado >= neto_para_pago:
                 self.add_error("importe_entregado", "El importe entregado debe ser menor al neto pendiente por pagar.")
 
@@ -236,7 +242,7 @@ class GroupingRecordBatchForm(forms.Form):
     proceso_cancelado = forms.BooleanField(required=False, label="Proceso cancelado")
     estado_pago = forms.ChoiceField(
         choices=ArtistRecord.PaymentStatus.choices,
-        initial=ArtistRecord.PaymentStatus.IN_PROGRESS,
+        initial=ArtistRecord.PaymentStatus.PENDIENTE,
         label="Estado de pago",
     )
     observaciones = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}), label="Observaciones")

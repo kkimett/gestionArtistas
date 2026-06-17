@@ -11,7 +11,7 @@ legend { font-weight: 700; padding: 0 8px; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .stack { display: grid; gap: 14px; }
 .actions { display: flex; gap: 12px; margin-top: 16px; }
-.checkbox-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.checkbox-group { display: grid; gap: 12px; }
 .checkbox-card { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid #dbe3ea; border-radius: 12px; background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%); }
 .checkbox-card input { width: auto; margin-top: 2px; }
 .checkbox-copy { display: grid; gap: 3px; }
@@ -100,30 +100,37 @@ legend { font-weight: 700; padding: 0 8px; }
                                     </div>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="checkbox-group">
-                            <div class="checkbox-card">
-                                {{ form.solicitud_a1 }}
-                                <div class="checkbox-copy">
-                                    {{ form.solicitud_a1.label_tag }}
-                                    <span class="meta">Indica si este registro requiere o incluye solicitud A1.</span>
-                                    <div class="a1-destino">
-                                        {{ form.destino_a1.label_tag }}
-                                        {{ form.destino_a1 }}
-                                        {{ form.destino_a1.errors }}
-                                        <span class="meta"></span>
+                            <div class="field field-highlight">
+                            <div class="checkbox-group">
+                                <div class="checkbox-card">
+                                    {{ form.solicitud_a1 }}
+                                    <div class="checkbox-copy">
+                                        {{ form.solicitud_a1.label_tag }}
+                                        <span class="meta">Indica si este registro requiere o incluye solicitud A1.</span>
+                                        <div class="a1-destino">
+                                            {{ form.destino_a1.label_tag }}
+                                            {{ form.destino_a1 }}
+                                            {{ form.destino_a1.errors }}
+                                            <span class="meta"></span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="checkbox-card">
-                                {{ form.proceso_cancelado }}
-                                <div class="checkbox-copy">
-                                    {{ form.proceso_cancelado.label_tag }}
-                                    <span class="meta">Úsalo cuando el trámite se haya interrumpido o anulado.</span>
+                            </div>
+                                <div class="field field-highlight">
+                                <div class="checkbox-group">
+                                    <div class="checkbox-card">
+                                        {{ form.proceso_cancelado }}
+                                        <div class="checkbox-copy">
+                                            {{ form.proceso_cancelado.label_tag }}
+                                            <span class="meta">Úsalo cuando el trámite se haya interrumpido o anulado.</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
+
+                      
                     </div>
                 </fieldset>
 
@@ -144,6 +151,16 @@ legend { font-weight: 700; padding: 0 8px; }
                             {{ form.estado_pago.label_tag }}
                             {{ form.estado_pago }}
                             {{ form.estado_pago.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.estado_seguridad_social.label_tag }}
+                            {{ form.estado_seguridad_social }}
+                            {{ form.estado_seguridad_social.errors }}
+                        </div>
+                        <div class="field">
+                            {{ form.estado_facturacion.label_tag }}
+                            {{ form.estado_facturacion }}
+                            {{ form.estado_facturacion.errors }}
                         </div>
                         <div class="field">
                             {{ form.importe_entregado.label_tag }}

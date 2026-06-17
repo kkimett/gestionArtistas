@@ -688,7 +688,7 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
             super()
             .get_queryset()
             .select_related("artista", "agrupacion")
-            .exclude(estado_pago=ArtistRecord.PaymentStatus.PAID)
+            .exclude(estado_pago=ArtistRecord.PaymentStatus.ABONADO)
         )
         query = self.request.GET.get("q", "").strip()
         status = self.request.GET.get("estado", "").strip()
@@ -704,7 +704,7 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
                 | Q(artista__dni_nie__icontains=query)
                 | Q(artista__numero_seguridad_social__icontains=query)
             )
-        if status and status != ArtistRecord.PaymentStatus.PAID:
+        if status and status != ArtistRecord.PaymentStatus.ABONADO:
             queryset = queryset.filter(estado_pago=status)
         if registration_type:
             queryset = queryset.filter(tipo_registro=registration_type)
@@ -726,7 +726,7 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
         context["payment_status_choices"] = [
             choice
             for choice in ArtistRecord.PaymentStatus.choices
-            if choice[0] != ArtistRecord.PaymentStatus.PAID
+            if choice[0] != ArtistRecord.PaymentStatus.ABONADO
         ]
         context["registration_type_choices"] = ArtistRecord.RegistrationType.choices
         context["filter_values"] = {
@@ -1254,7 +1254,7 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
         records = (
             ArtistRecord.objects
             .filter(agrupacion_id=self.kwargs["pk"])
-            .exclude(estado_pago=ArtistRecord.PaymentStatus.PAID)
+            .exclude(estado_pago=ArtistRecord.PaymentStatus.ABONADO)
             .select_related("artista", "agrupacion")
             .order_by("artista_id", "-fecha_alta", "-creado_en")
         )

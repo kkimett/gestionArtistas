@@ -10,7 +10,7 @@ class PaymentSummaryView(LoginRequiredMixin, TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         paid_records = ArtistRecord.objects.select_related("artista", "agrupacion").filter(
-            estado_pago=ArtistRecord.PaymentStatus.PAID,
+            estado_pago=ArtistRecord.PaymentStatus.ABONADO,
         ).order_by("-actualizado_en")
         total_paid_records = sum(record.importe_entregado or record.neto_para_pago for record in paid_records)
 

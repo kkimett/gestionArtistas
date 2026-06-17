@@ -21,9 +21,8 @@ th { background: #f9fafb; }
 .status-badge { display: inline-flex; align-items: center; width: fit-content; font-size: 12px; font-weight: 700; border-radius: 999px; padding: 5px 10px; border: 1px solid transparent; }
 .status-pagado { background: #dcfce7; border-color: #86efac; color: #166534; }
 .status-pendiente { background: #fef3c7; border-color: #fcd34d; color: #92400e; }
-.status-proceso { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
 .status-medias { background: #ffedd5; border-color: #fdba74; color: #c2410c; }
-.status-anulado { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.status-adelanto { background: #dbeafe; border-color: #93c5fd; color: #1d4ed8; }
 .amount { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .compact-col { width: 12%; }
 .artist-col { width: 22%; }
@@ -36,9 +35,8 @@ th { background: #f9fafb; }
 .estado-chip { font-size: 12px; border-radius: 999px; padding: 4px 10px; border: 1px solid transparent; }
 .chip-pagado { background: #dcfce7; border-color: #86efac; }
 .chip-pendiente { background: #fef3c7; border-color: #fcd34d; }
-.chip-proceso { background: #dbeafe; border-color: #93c5fd; }
 .chip-medias { background: #ffedd5; border-color: #fdba74; }
-.chip-anulado { background: #fee2e2; border-color: #fca5a5; }
+.chip-adelanto { background: #dbeafe; border-color: #93c5fd; }
 tbody tr:nth-child(odd) td { background: #ffffff; }
 tbody tr:nth-child(even) td { background: #f6f7f9; }
 @media (max-width: 1200px) {
@@ -137,11 +135,10 @@ tbody tr:nth-child(even) td { background: #f6f7f9; }
         <!--p style="margin-top: 16px;"><a class="button secondary" href="/billing/payments/today/">Ver resumen de pagos de hoy</a></p-->
 
         <div class="estado-leyenda">
-            <span class="estado-chip chip-pagado">Pagado</span>
-            <span class="estado-chip chip-pendiente">Pendiente pago</span>
-            <span class="estado-chip chip-proceso">En Proceso</span>
-            <span class="estado-chip chip-medias">Pago a Medias</span>
-            <span class="estado-chip chip-anulado">Anulado</span>
+            <span class="estado-chip chip-pagado">Abonado</span>
+            <span class="estado-chip chip-pendiente">Pendiente</span>
+            <span class="estado-chip chip-medias">A medias</span>
+            <span class="estado-chip chip-adelanto">Adelanto</span>
         </div>
 
         <div class="table-wrap">
@@ -171,7 +168,9 @@ tbody tr:nth-child(even) td { background: #f6f7f9; }
                             <div class="cell-stack">
                                 <div class="cell-line"><strong>Tipo:</strong> {{ record.get_tipo_registro_display }}</div>
                                 <div class="cell-line"><strong>Agrupación:</strong> {{ record.agrupacion.nombre|default:"-" }}</div>
-                                <span class="status-badge {% if record.estado_pago == 'PAID' %}status-pagado{% elif record.estado_pago == 'PENDING_INVOICE' %}status-pendiente{% elif record.estado_pago == 'IN_PROGRESS' %}status-proceso{% elif record.estado_pago == 'PARTIAL' %}status-medias{% elif record.estado_pago == 'CANCELLED' %}status-anulado{% endif %}">{{ record.get_estado_pago_display }}</span>
+                                <div class="cell-line"><strong>Estado Seg. Social:</strong> {{ record.get_estado_seguridad_social_display }}</div>
+                                <div class="cell-line"><strong>Estado Facturación:</strong> {{ record.get_estado_facturacion_display }}</div>
+                                <span class="status-badge {% if record.estado_pago == 'ABONADO' %}status-pagado{% elif record.estado_pago == 'PENDIENTE' %}status-pendiente{% elif record.estado_pago == 'A_MEDIAS' %}status-medias{% elif record.estado_pago == 'ADELANTO' %}status-adelanto{% endif %}">{{ record.get_estado_pago_display }}</span>
                             </div>
                         </td>
                         <td>
