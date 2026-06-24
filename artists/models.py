@@ -331,6 +331,9 @@ class GroupingRecordBatch(models.Model):
         ADELANTO = "ADELANTO", "Adelanto"
 
     agrupacion = models.ForeignKey(Grouping, on_delete=models.CASCADE, related_name="lotes_registros")
+    base_imponible = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    gastos = models.JSONField(default=list, blank=True)
     lineas = models.JSONField(default=list)
     fecha_alta = models.DateField()
     fecha_baja = models.DateField(null=True, blank=True)
@@ -350,6 +353,39 @@ class GroupingRecordBatch(models.Model):
 
     def __str__(self):
         return f"{self.agrupacion.nombre} - {self.get_estado_display()} ({self.creado_en:%Y-%m-%d %H:%M})"
+
+    @property
+    def total_gastos_descuento(self):
+        total = self.honorarios or Decimal("0")
+        gastos = self.gastos if isinstance(self.gastos, list) else []
+        for item in gastos:
+            if not isinstance(item, dict):
+                continue
+            try:
+                total += Decimal(str(item.get("importe", "0")).replace(",", "."))
+            except Exception:
+                continue
+        return total
+
+    @property
+    def base_disponible_para_artistas(self):
+        if self.base_imponible is None:
+            return None
+        disponible = (self.base_imponible or Decimal("0")) - self.total_gastos_descuento
+        return disponible if disponible > 0 else Decimal("0")
+
+    @property
+    def total_cache_lineas(self):
+        total = Decimal("0")
+        lineas = self.lineas if isinstance(self.lineas, list) else []
+        for item in lineas:
+            if not isinstance(item, dict):
+                continue
+            try:
+                total += Decimal(str(item.get("cache_neto", "0")).replace(",", "."))
+            except Exception:
+                continue
+        return total
 
 
 class ArtistRecord(models.Model):

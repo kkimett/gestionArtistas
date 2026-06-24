@@ -1,5 +1,5 @@
-import re
 import json
+import re
 from decimal import Decimal, InvalidOperation
 
 from django import forms
@@ -171,12 +171,10 @@ class ArtistRecordForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # El navegador para input type=date usa YYYY-MM-DD.
         self.fields["fecha_alta"].input_formats = ["%Y-%m-%d"]
         self.fields["fecha_baja"].input_formats = ["%Y-%m-%d"]
         self.fields["coste_empresa"].label = "Coste de la Empresa"
 
-        # Se muestran como solo lectura, pero deben enviarse para validar correctamente.
         for field_name in (
             "coste_empresa",
             "coste_gestion",
@@ -200,8 +198,6 @@ class ArtistRecordForm(forms.ModelForm):
             cleaned_data["destino_a1"] = ""
 
         estado_pago = cleaned_data.get("estado_pago")
-        estado_seguridad_social = cleaned_data.get("estado_seguridad_social")
-        estado_facturacion = cleaned_data.get("estado_facturacion")
         importe_entregado = cleaned_data.get("importe_entregado")
         neto_para_pago = (cleaned_data.get("cache_neto") or 0) - (
             (cleaned_data.get("coste_empresa") or 0)
@@ -220,7 +216,6 @@ class ArtistRecordForm(forms.ModelForm):
 
     def save(self, commit=True):
         instance = super().save(commit=False)
-        # Calcular automáticamente los costos según el tramo
         instance.calculate_and_update_costs()
         if commit:
             instance.save()
@@ -228,6 +223,9 @@ class ArtistRecordForm(forms.ModelForm):
 
 
 class GroupingRecordBatchForm(forms.Form):
+    base_imponible = forms.DecimalField(min_value=Decimal("0.01"), decimal_places=2, label="Base imponible")
+    honorarios = forms.DecimalField(min_value=Decimal("0"), decimal_places=2, required=False, initial=0, label="Honorarios")
+    gastos = forms.CharField(widget=forms.HiddenInput(), required=False)
     agrupacion = forms.ModelChoiceField(
         queryset=Grouping.objects.filter(activo=True).order_by("nombre"),
         label="Agrupación",
@@ -251,11 +249,56 @@ class GroupingRecordBatchForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields["fecha_alta"].input_formats = ["%Y-%m-%d"]
         self.fields["fecha_baja"].input_formats = ["%Y-%m-%d"]
+        self.fields["base_imponible"].widget.attrs.update({"step": "0.01", "min": "0"})
+        self.fields["honorarios"].widget.attrs.update({"step": "0.01", "min": "0"})
+
+    def clean_gastos(self):
+        raw_value = (self.cleaned_data.get("gastos") or "").strip()
+        if not raw_value:
+            self.cleaned_data["gastos_normalizados"] = []
+            return "[]"
+
+        try:
+            parsed = json.loads(raw_value)
+        except json.JSONDecodeError as exc:
+            raise ValidationError("No se pudieron interpretar los gastos de la agrupación.") from exc
+
+        if not isinstance(parsed, list):
+            raise ValidationError("El formato de gastos no es válido.")
+
+        normalizados = []
+        for index, item in enumerate(parsed, start=1):
+            if not isinstance(item, dict):
+                raise ValidationError(f"Gasto {index}: formato inválido.")
+
+            concepto = str(item.get("concepto", "")).strip()
+            importe_raw = str(item.get("importe", "")).strip().replace(",", ".")
+
+            if not concepto:
+                raise ValidationError(f"Gasto {index}: falta el concepto.")
+            if not importe_raw:
+                raise ValidationError(f"Gasto {index}: falta el importe.")
+
+            try:
+                importe = Decimal(importe_raw)
+            except InvalidOperation as exc:
+                raise ValidationError(f"Gasto {index}: el importe no es válido.") from exc
+
+            if importe < 0:
+                raise ValidationError(f"Gasto {index}: el importe no puede ser negativo.")
+
+            normalizados.append({"concepto": concepto, "importe": importe})
+
+        self.cleaned_data["gastos_normalizados"] = normalizados
+        return json.dumps(
+            [{"concepto": item["concepto"], "importe": f"{item['importe']:.2f}"} for item in normalizados],
+            ensure_ascii=False,
+        )
 
     def clean_lineas(self):
         raw_value = (self.cleaned_data.get("lineas") or "").strip()
         if not raw_value:
-            raise ValidationError("Añade al menos un artista con su caché.")
+            raise ValidationError("Añade al menos un artista.")
 
         try:
             parsed = json.loads(raw_value)
@@ -282,16 +325,18 @@ class GroupingRecordBatchForm(forms.Form):
 
             if not artist_id:
                 raise ValidationError(f"Línea {index}: falta el artista.")
-            if not cache_raw:
-                raise ValidationError(f"Línea {index}: falta el caché neto.")
+            if es_autonomo and not cache_raw:
+                raise ValidationError(f"Línea {index}: falta el caché neto del autónomo.")
 
-            try:
-                cache_neto = Decimal(cache_raw)
-            except InvalidOperation as exc:
-                raise ValidationError(f"Línea {index}: el caché neto no es válido.") from exc
+            cache_neto = None
+            if cache_raw:
+                try:
+                    cache_neto = Decimal(cache_raw)
+                except InvalidOperation as exc:
+                    raise ValidationError(f"Línea {index}: el caché neto no es válido.") from exc
 
-            if cache_neto <= 0:
-                raise ValidationError(f"Línea {index}: el caché neto debe ser mayor que 0.")
+                if cache_neto <= 0:
+                    raise ValidationError(f"Línea {index}: el caché neto debe ser mayor que 0.")
 
             if solicitud_a1 and not destino_a1:
                 raise ValidationError(f"Línea {index}: indica destino cuando Solicitud A1 está marcada.")
@@ -340,6 +385,56 @@ class GroupingRecordBatchForm(forms.Form):
         fecha_baja = cleaned_data.get("fecha_baja")
         if fecha_alta and fecha_baja and fecha_baja < fecha_alta:
             self.add_error("fecha_baja", "La fecha de baja no puede ser anterior a la fecha de alta.")
+
+        base_imponible = cleaned_data.get("base_imponible")
+        honorarios = cleaned_data.get("honorarios") or Decimal("0")
+        gastos_normalizados = cleaned_data.get("gastos_normalizados", [])
+        total_gastos = sum((item["importe"] for item in gastos_normalizados), Decimal("0"))
+        total_descuentos = honorarios + total_gastos
+        cleaned_data["total_descuentos"] = total_descuentos
+
+        if base_imponible is not None and total_descuentos > base_imponible:
+            self.add_error(None, "Los descuentos y gastos no pueden superar la base imponible.")
+            return cleaned_data
+
+        lineas_normalizadas = cleaned_data.get("lineas_normalizadas", [])
+        disponible = (base_imponible or Decimal("0")) - total_descuentos if base_imponible is not None else None
+        cleaned_data["base_disponible_para_artistas"] = disponible
+
+        total_autonomos = Decimal("0")
+        lineas_no_autonomas = []
+        for item in lineas_normalizadas:
+            if item["es_autonomo"]:
+                if item["cache_neto"] is None or item["cache_neto"] <= 0:
+                    self.add_error("lineas", "Los artistas autónomos deben tener un caché manual mayor que 0.")
+                    return cleaned_data
+                total_autonomos += item["cache_neto"]
+            else:
+                lineas_no_autonomas.append(item)
+
+        if disponible is not None and total_autonomos > disponible:
+            self.add_error(
+                "lineas",
+                "La suma de los cachés manuales de autónomos no puede superar la base disponible.",
+            )
+            return cleaned_data
+
+        if disponible is not None and lineas_no_autonomas:
+            restante = disponible - total_autonomos
+            restante_cents = int((restante * 100).quantize(Decimal("1")))
+            base_cents, extra_cents = divmod(restante_cents, len(lineas_no_autonomas))
+            for index, item in enumerate(lineas_no_autonomas):
+                cents = base_cents + (1 if index < extra_cents else 0)
+                item["cache_neto"] = Decimal(cents) / Decimal("100")
+
+        total_cache_lineas = sum((item["cache_neto"] or Decimal("0") for item in lineas_normalizadas), Decimal("0"))
+        cleaned_data["total_cache_lineas"] = total_cache_lineas
+
+        if disponible is not None and total_cache_lineas > disponible:
+            self.add_error(
+                "lineas",
+                "La suma de los cachés no puede superar la base disponible tras restar honorarios y gastos.",
+            )
 
         return cleaned_data
 

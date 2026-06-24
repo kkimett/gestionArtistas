@@ -691,7 +691,9 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
             .exclude(estado_pago=ArtistRecord.PaymentStatus.ABONADO)
         )
         query = self.request.GET.get("q", "").strip()
-        status = self.request.GET.get("estado", "").strip()
+        payment_status = self.request.GET.get("estado_pago", "").strip()
+        seguridad_social_status = self.request.GET.get("estado_seguridad_social", "").strip()
+        facturacion_status = self.request.GET.get("estado_facturacion", "").strip()
         registration_type = self.request.GET.get("tipo_registro", "").strip()
         grouping = self.request.GET.get("agrupacion", "").strip()
         artist_id = self.request.GET.get("artista", "").strip()
@@ -704,8 +706,12 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
                 | Q(artista__dni_nie__icontains=query)
                 | Q(artista__numero_seguridad_social__icontains=query)
             )
-        if status and status != ArtistRecord.PaymentStatus.ABONADO:
-            queryset = queryset.filter(estado_pago=status)
+        if payment_status and payment_status != ArtistRecord.PaymentStatus.ABONADO:
+            queryset = queryset.filter(estado_pago=payment_status)
+        if seguridad_social_status:
+            queryset = queryset.filter(estado_seguridad_social=seguridad_social_status)
+        if facturacion_status:
+            queryset = queryset.filter(estado_facturacion=facturacion_status)
         if registration_type:
             queryset = queryset.filter(tipo_registro=registration_type)
         if grouping:
@@ -728,10 +734,14 @@ class ArtistRecordListView(LoginRequiredMixin, ListView):
             for choice in ArtistRecord.PaymentStatus.choices
             if choice[0] != ArtistRecord.PaymentStatus.ABONADO
         ]
+        context["seguridad_social_status_choices"] = ArtistRecord.SeguridadSocialStatus.choices
+        context["facturacion_status_choices"] = ArtistRecord.FacturacionStatus.choices
         context["registration_type_choices"] = ArtistRecord.RegistrationType.choices
         context["filter_values"] = {
             "q": self.request.GET.get("q", ""),
-            "estado": self.request.GET.get("estado", ""),
+            "estado_pago": self.request.GET.get("estado_pago", ""),
+            "estado_seguridad_social": self.request.GET.get("estado_seguridad_social", ""),
+            "estado_facturacion": self.request.GET.get("estado_facturacion", ""),
             "tipo_registro": self.request.GET.get("tipo_registro", ""),
             "agrupacion": self.request.GET.get("agrupacion", ""),
             "artista": self.request.GET.get("artista", ""),
@@ -907,6 +917,18 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
     form_class = GroupingRecordBatchForm
     success_url = reverse_lazy("artists:record-list")
 
+    @staticmethod
+    def _sum_lineas_cache(lineas):
+        total = Decimal("0")
+        for item in lineas or []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                total += Decimal(str(item.get("cache_neto", "0")).replace(",", "."))
+            except (InvalidOperation, TypeError):
+                continue
+        return total
+
     def _get_standby_batch(self):
         batch_id = (self.request.POST.get("batch_id") or self.request.GET.get("batch") or "").strip()
         if not batch_id:
@@ -923,6 +945,9 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
             initial.update(
                 {
                     "agrupacion": standby_batch.agrupacion_id,
+                    "base_imponible": standby_batch.base_imponible or self._sum_lineas_cache(standby_batch.lineas),
+                    "honorarios": standby_batch.honorarios,
+                    "gastos": json.dumps(standby_batch.gastos or [], ensure_ascii=False),
                     "lineas": json.dumps(standby_batch.lineas or []),
                     "fecha_alta": standby_batch.fecha_alta,
                     "fecha_baja": standby_batch.fecha_baja,
@@ -1002,11 +1027,21 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
             }
             for item in lineas
         ]
+        serialized_gastos = [
+            {
+                "concepto": item["concepto"],
+                "importe": str(item["importe"]),
+            }
+            for item in cleaned.get("gastos_normalizados", [])
+        ]
 
         if submit_action == "standby":
             with transaction.atomic():
                 if standby_batch:
                     standby_batch.agrupacion = cleaned["agrupacion"]
+                    standby_batch.base_imponible = cleaned["base_imponible"]
+                    standby_batch.honorarios = cleaned.get("honorarios") or Decimal("0")
+                    standby_batch.gastos = serialized_gastos
                     standby_batch.lineas = serialized_lineas
                     standby_batch.fecha_alta = cleaned["fecha_alta"]
                     standby_batch.fecha_baja = cleaned.get("fecha_baja")
@@ -1017,6 +1052,9 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
                 else:
                     GroupingRecordBatch.objects.create(
                         agrupacion=cleaned["agrupacion"],
+                        base_imponible=cleaned["base_imponible"],
+                        honorarios=cleaned.get("honorarios") or Decimal("0"),
+                        gastos=serialized_gastos,
                         lineas=serialized_lineas,
                         fecha_alta=cleaned["fecha_alta"],
                         fecha_baja=cleaned.get("fecha_baja"),
@@ -1038,6 +1076,9 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
                 if batch_for_records is None:
                     batch_for_records = GroupingRecordBatch.objects.create(
                         agrupacion=cleaned["agrupacion"],
+                        base_imponible=cleaned["base_imponible"],
+                        honorarios=cleaned.get("honorarios") or Decimal("0"),
+                        gastos=serialized_gastos,
                         lineas=serialized_lineas,
                         fecha_alta=cleaned["fecha_alta"],
                         fecha_baja=cleaned.get("fecha_baja"),
@@ -1052,6 +1093,9 @@ class GroupingRecordBatchCreateView(LoginRequiredMixin, FormView):
 
                 if standby_batch:
                     standby_batch.agrupacion = cleaned["agrupacion"]
+                    standby_batch.base_imponible = cleaned["base_imponible"]
+                    standby_batch.honorarios = cleaned.get("honorarios") or Decimal("0")
+                    standby_batch.gastos = serialized_gastos
                     standby_batch.lineas = serialized_lineas
                     standby_batch.fecha_alta = cleaned["fecha_alta"]
                     standby_batch.fecha_baja = cleaned.get("fecha_baja")
@@ -1086,6 +1130,13 @@ class GroupingRecordBatchProcessStandbyView(LoginRequiredMixin, View):
         lineas_raw = batch.lineas if isinstance(batch.lineas, list) else []
         if not lineas_raw:
             messages.error(request, "El registro en Stand By no contiene lineas para generar registros.")
+            return redirect("artists:record-grouping-list")
+
+        if batch.base_disponible_para_artistas is not None and batch.total_cache_lineas > batch.base_disponible_para_artistas:
+            messages.error(
+                request,
+                "No se puede procesar el Stand By porque la suma de los cachÃ©s supera la base disponible.",
+            )
             return redirect("artists:record-grouping-list")
 
         artist_ids = [str((item or {}).get("artista_id", "")).strip() for item in lineas_raw if isinstance(item, dict)]
@@ -1271,8 +1322,12 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
         initial["agrupacion"] = grouping.pk
         if latest_map:
             latest_record = max(latest_map.values(), key=lambda record: (record.fecha_alta, record.creado_en))
+            total_cache = sum((record.cache_neto for record in latest_map.values()), Decimal("0"))
             initial.update(
                 {
+                    "base_imponible": total_cache,
+                    "honorarios": Decimal("0"),
+                    "gastos": "[]",
                     "fecha_alta": latest_record.fecha_alta,
                     "fecha_baja": latest_record.fecha_baja,
                     "proceso_cancelado": latest_record.proceso_cancelado,
@@ -1291,6 +1346,12 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
                 for record in sorted(latest_map.values(), key=lambda record: record.artista.nombre_completo)
             ]
         else:
+            initial.update(
+                {
+                    "honorarios": Decimal("0"),
+                    "gastos": "[]",
+                }
+            )
             lineas = [
                 {
                     "artista_id": str(artist.pk),
@@ -1325,11 +1386,21 @@ class GroupingRecordBatchUpdateView(LoginRequiredMixin, FormView):
             }
             for item in lineas
         ]
+        serialized_gastos = [
+            {
+                "concepto": item["concepto"],
+                "importe": str(item["importe"]),
+            }
+            for item in cleaned.get("gastos_normalizados", [])
+        ]
 
         try:
             with transaction.atomic():
                 GroupingRecordBatch.objects.create(
                     agrupacion=cleaned["agrupacion"],
+                    base_imponible=cleaned["base_imponible"],
+                    honorarios=cleaned.get("honorarios") or Decimal("0"),
+                    gastos=serialized_gastos,
                     lineas=serialized_lineas,
                     fecha_alta=cleaned["fecha_alta"],
                     fecha_baja=cleaned.get("fecha_baja"),

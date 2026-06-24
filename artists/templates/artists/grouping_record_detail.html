@@ -56,12 +56,35 @@ th { background: #f9fafb; }
             <div class="meta-label">Generado</div>
             <div class="meta-value">{{ batch.generado_en|date:"d/m/Y H:i"|default:"-" }}</div>
         </div>
+        <div class="meta-item">
+            <div class="meta-label">Base imponible</div>
+            <div class="meta-value">{{ batch.base_imponible|default:"-" }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Honorarios</div>
+            <div class="meta-value">{{ batch.honorarios }}</div>
+        </div>
+        <div class="meta-item">
+            <div class="meta-label">Disponible artistas</div>
+            <div class="meta-value">{{ batch.base_disponible_para_artistas|default:"-" }}</div>
+        </div>
     </div>
 
     {% if batch.observaciones %}
     <div class="meta-item" style="margin-bottom: 14px;">
         <div class="meta-label">Observaciones</div>
         <div class="meta-value">{{ batch.observaciones }}</div>
+    </div>
+    {% endif %}
+
+    {% if batch.gastos %}
+    <div class="meta-item" style="margin-bottom: 14px;">
+        <div class="meta-label">Gastos</div>
+        <div class="meta-value">
+            {% for gasto in batch.gastos %}
+                <div>{{ gasto.concepto }}: {{ gasto.importe }}</div>
+            {% endfor %}
+        </div>
     </div>
     {% endif %}
 

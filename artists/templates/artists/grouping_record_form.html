@@ -8,13 +8,16 @@
 .layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .panel-box { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 16px; }
 .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .field { display: grid; gap: 6px; }
 .field label { font-weight: 700; font-size: 13px; }
+.section-title { margin: 0 0 12px; }
+.subsection { margin-top: 18px; padding-top: 18px; border-top: 1px solid #e5e7eb; }
 .table-wrap { overflow-x: auto; margin-top: 10px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { border-bottom: 1px solid #e5e7eb; padding: 8px; text-align: left; font-size: 13px; }
 th { background: #f9fafb; }
-.line-builder { display: grid; grid-template-columns: 1.2fr .6fr auto; gap: 10px; align-items: end; margin-top: 12px; }
+.line-builder { display: grid; grid-template-columns: 1.2fr .6fr .5fr auto; gap: 10px; align-items: end; margin-top: 12px; }
 .pill-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #111827; background: #111827; color: #fff; cursor: pointer; }
 .row-actions { display: flex; gap: 8px; align-items: center; }
 .remove-btn { border: 1px solid #b91c1c; background: #fff; color: #b91c1c; border-radius: 8px; padding: 6px 9px; cursor: pointer; }
@@ -31,6 +34,7 @@ th { background: #f9fafb; }
 @media (max-width: 980px) {
     .layout { grid-template-columns: 1fr; }
     .grid-2 { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
     .summary { grid-template-columns: 1fr; }
 }
 {% endblock %}
@@ -56,6 +60,75 @@ th { background: #f9fafb; }
         {% if form.non_field_errors %}
             <div class="errors">{{ form.non_field_errors }}</div>
         {% endif %}
+
+        <h3 class="section-title">Base imponible y gastos</h3>
+        <div class="grid-3">
+            <div class="field">
+                {{ form.base_imponible.label_tag }}
+                {{ form.base_imponible }}
+                {{ form.base_imponible.errors }}
+            </div>
+            <div class="field">
+                {{ form.honorarios.label_tag }}
+                {{ form.honorarios }}
+                {{ form.honorarios.errors }}
+            </div>
+        </div>
+        {{ form.gastos }}
+        {{ form.gastos.errors }}
+
+        <div class="subsection" style="margin-top: 14px;">
+            <div class="field">
+                <label>Gastos</label>
+                <div class="hint">Puedes aÃ±adir conceptos sugeridos o escribir cualquier otro gasto libremente.</div>
+            </div>
+            <div class="actions" style="margin-top: 8px;">
+                <button class="button secondary gasto-sugerido-btn" type="button" data-concepto="Diesel">+ Diesel</button>
+                <button class="button secondary gasto-sugerido-btn" type="button" data-concepto="Hotel">+ Hotel</button>
+                <button class="button secondary gasto-sugerido-btn" type="button" data-concepto="Gasolina">+ Gasolina</button>
+                <button class="button secondary gasto-sugerido-btn" type="button" data-concepto="Alquiler de coche">+ Alquiler de coche</button>
+            </div>
+
+            <div class="line-builder" style="grid-template-columns: 1.2fr .6fr auto;">
+                <div class="field">
+                    <label for="expense-concept">Concepto</label>
+                    <input id="expense-concept" type="text" placeholder="Ej. Peajes, parking, backstage...">
+                </div>
+                <div class="field">
+                    <label for="expense-amount">Importe</label>
+                    <input id="expense-amount" type="number" min="0" step="0.01" placeholder="0,00">
+                </div>
+                <div class="field">
+                    <button class="pill-btn" type="button" id="add-expense-btn">AÃ±adir gasto</button>
+                </div>
+            </div>
+
+            <div class="table-wrap" style="margin-top: 14px;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th>Importe</th>
+                            <th>AcciÃ³n</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gastos-body">
+                        <tr><td colspan="3">No hay gastos aÃ±adidos.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="summary" style="margin-top: 14px;">
+            <div class="kpi"><div class="label">Base imponible</div><div class="value" id="budget-base">0,00â‚¬</div></div>
+            <div class="kpi"><div class="label">Total descuentos y gastos</div><div class="value" id="budget-gastos">0,00â‚¬</div></div>
+            <div class="kpi"><div class="label">Disponible para artistas</div><div class="value" id="budget-disponible">0,00â‚¬</div></div>
+            <div class="kpi"><div class="label">CachÃ© asignado</div><div class="value" id="budget-asignado">0,00â‚¬</div></div>
+            <div class="kpi"><div class="label">Diferencia</div><div class="value" id="budget-diferencia">0,00â‚¬</div></div>
+        </div>
+        <div class="hint">La base imponible se usa solo en registros de agrupaciones. Primero se restan honorarios y gastos, y el resto queda disponible para repartir entre los cachÃ©s de los artistas.</div>
+
+        <div class="subsection">
 
         <div class="field">
             {{ form.agrupacion.label_tag }}
@@ -143,6 +216,7 @@ th { background: #f9fafb; }
             <button class="button" type="submit" name="submit_action" value="generate">Generar registros</button>
             {% endif %}
         </div>
+        </div>
     </div>
 
     <div class="panel-box">
@@ -194,10 +268,23 @@ th { background: #f9fafb; }
         const addLineBtn = document.getElementById("add-line-btn");
         const fechaAltaInput = document.getElementById("id_fecha_alta");
         const fechaBajaInput = document.getElementById("id_fecha_baja");
+        const baseImponibleInput = document.getElementById("id_base_imponible");
+        const honorariosInput = document.getElementById("id_honorarios");
+        const gastosInput = document.getElementById("id_gastos");
+        const gastosBody = document.getElementById("gastos-body");
+        const expenseConceptInput = document.getElementById("expense-concept");
+        const expenseAmountInput = document.getElementById("expense-amount");
+        const addExpenseBtn = document.getElementById("add-expense-btn");
+        const suggestedExpenseButtons = Array.from(document.querySelectorAll(".gasto-sugerido-btn"));
 
         const calcularBtn = document.getElementById("calcular-btn");
         const previewBody = document.getElementById("preview-body");
         const previewInfo = document.getElementById("preview-info");
+        const budgetBase = document.getElementById("budget-base");
+        const budgetGastos = document.getElementById("budget-gastos");
+        const budgetDisponible = document.getElementById("budget-disponible");
+        const budgetAsignado = document.getElementById("budget-asignado");
+        const budgetDiferencia = document.getElementById("budget-diferencia");
 
         const totalBruto = document.getElementById("total-bruto");
         const totalEmpresa = document.getElementById("total-empresa");
@@ -211,6 +298,7 @@ th { background: #f9fafb; }
             .map((option) => [option.value, option.textContent]));
 
         let lineas = [];
+        let gastos = [];
 
         function toDecimalText(value) {
             const number = parseFloat((value || "").toString().replace(",", "."));
@@ -218,8 +306,78 @@ th { background: #f9fafb; }
             return number.toFixed(2);
         }
 
+        function toNumber(value) {
+            const number = parseFloat((value || "0").toString().replace(",", "."));
+            return Number.isFinite(number) ? number : 0;
+        }
+
+        function escapeHtml(value) {
+            return (value || "").toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
         function syncLineas() {
             lineasInput.value = JSON.stringify(lineas);
+            updateBudgetSummary();
+        }
+
+        function syncGastos() {
+            gastosInput.value = JSON.stringify(gastos);
+            updateBudgetSummary();
+        }
+
+        function rebalanceLineas() {
+            const base = toNumber(baseImponibleInput?.value);
+            const honorarios = toNumber(honorariosInput?.value);
+            const disponible = base - honorarios - getGastosTotal();
+            const autonomos = lineas.filter((linea) => linea.es_autonomo);
+            const noAutonomos = lineas.filter((linea) => !linea.es_autonomo);
+            const totalAutonomos = autonomos.reduce((total, linea) => total + toNumber(linea.cache_neto), 0);
+            const restante = disponible - totalAutonomos;
+
+            if (!noAutonomos.length) {
+                return;
+            }
+
+            const safeRestante = restante > 0 ? restante : 0;
+            const totalCents = Math.round(safeRestante * 100);
+            const baseCents = Math.floor(totalCents / noAutonomos.length);
+            const extraCents = totalCents % noAutonomos.length;
+
+            noAutonomos.forEach(function (linea, index) {
+                const cents = baseCents + (index < extraCents ? 1 : 0);
+                linea.cache_neto = (cents / 100).toFixed(2);
+            });
+        }
+
+        function getAssignedCacheTotal() {
+            rebalanceLineas();
+            return lineas.reduce((total, linea) => total + toNumber(linea.cache_neto), 0);
+        }
+
+        function getGastosTotal() {
+            return gastos.reduce((total, gasto) => total + toNumber(gasto.importe), 0);
+        }
+
+        function updateBudgetSummary() {
+            const base = toNumber(baseImponibleInput?.value);
+            const honorarios = toNumber(honorariosInput?.value);
+            const totalGastos = getGastosTotal();
+            const totalDescuentos = honorarios + totalGastos;
+            const disponible = base - totalDescuentos;
+            const asignado = getAssignedCacheTotal();
+            const diferencia = disponible - asignado;
+
+            lineasInput.value = JSON.stringify(lineas);
+            budgetBase.textContent = formatMoney(base);
+            budgetGastos.textContent = formatMoney(totalDescuentos);
+            budgetDisponible.textContent = formatMoney(disponible);
+            budgetAsignado.textContent = formatMoney(asignado);
+            budgetDiferencia.textContent = formatMoney(diferencia);
         }
 
         function renderLineas() {
@@ -229,13 +387,14 @@ th { background: #f9fafb; }
                 return;
             }
 
+            rebalanceLineas();
             lineasBody.innerHTML = lineas.map((linea, index) => (
                 "<tr>" +
-                    "<td>" + (artistNameMap.get(linea.artista_id) || "Artista") + "</td>" +
-                    "<td><input class=\"inline-cache\" type=\"number\" min=\"0.01\" step=\"0.01\" value=\"" + (linea.cache_neto || "") + "\" data-index=\"" + index + "\" aria-label=\"Cache neto\"></td>" +
+                    "<td>" + escapeHtml(artistNameMap.get(linea.artista_id) || "Artista") + "</td>" +
+                    "<td><input class=\"inline-cache\" type=\"number\" min=\"0.01\" step=\"0.01\" value=\"" + (linea.cache_neto || "") + "\" data-index=\"" + index + "\" aria-label=\"Cache neto\" " + (linea.es_autonomo ? "" : "readonly") + "></td>" +
                     "<td><input class=\"inline-flag\" type=\"checkbox\" " + (linea.es_autonomo ? "checked" : "") + " data-index=\"" + index + "\" data-field=\"es_autonomo\" aria-label=\"Autónomo\"></td>" +
                     "<td><input class=\"inline-flag\" type=\"checkbox\" " + (linea.solicitud_a1 ? "checked" : "") + " data-index=\"" + index + "\" data-field=\"solicitud_a1\" aria-label=\"Solicitud A1\"></td>" +
-                    "<td><input class=\"inline-destino\" type=\"text\" value=\"" + (linea.destino_a1 || "") + "\" data-index=\"" + index + "\" data-field=\"destino_a1\" aria-label=\"Destino A1\" " + (linea.solicitud_a1 ? "" : "disabled") + "></td>" +
+                    "<td><input class=\"inline-destino\" type=\"text\" value=\"" + escapeHtml(linea.destino_a1 || "") + "\" data-index=\"" + index + "\" data-field=\"destino_a1\" aria-label=\"Destino A1\" " + (linea.solicitud_a1 ? "" : "disabled") + "></td>" +
                     "<td><button type=\"button\" class=\"remove-btn\" data-index=\"" + index + "\">Quitar</button></td>" +
                 "</tr>"
             )).join("");
@@ -268,6 +427,49 @@ th { background: #f9fafb; }
             });
             renderLineas();
             previewInfo.textContent = "Línea añadida.";
+        }
+
+        function renderGastos() {
+            if (!gastos.length) {
+                gastosBody.innerHTML = "<tr><td colspan=\"3\">No hay gastos aÃ±adidos.</td></tr>";
+                syncGastos();
+                return;
+            }
+
+            gastosBody.innerHTML = gastos.map((gasto, index) => (
+                "<tr>" +
+                    "<td><input class=\"inline-destino\" type=\"text\" value=\"" + escapeHtml(gasto.concepto || "") + "\" data-expense-index=\"" + index + "\" data-expense-field=\"concepto\" aria-label=\"Concepto gasto\"></td>" +
+                    "<td><input class=\"inline-cache\" type=\"number\" min=\"0\" step=\"0.01\" value=\"" + (gasto.importe || "") + "\" data-expense-index=\"" + index + "\" data-expense-field=\"importe\" aria-label=\"Importe gasto\"></td>" +
+                    "<td><button type=\"button\" class=\"remove-btn\" data-expense-index=\"" + index + "\">Quitar</button></td>" +
+                "</tr>"
+            )).join("");
+
+            syncGastos();
+        }
+
+        function addGasto(concepto, importe) {
+            const conceptoLimpio = (concepto || "").trim();
+            const importeNormalizado = toDecimalText(importe);
+
+            if (!conceptoLimpio) {
+                previewInfo.textContent = "Indica el concepto del gasto.";
+                return;
+            }
+            if (importeNormalizado === "") {
+                previewInfo.textContent = "Indica un importe de gasto vÃ¡lido.";
+                return;
+            }
+            if (toNumber(importeNormalizado) < 0) {
+                previewInfo.textContent = "El gasto no puede ser negativo.";
+                return;
+            }
+
+            gastos.push({
+                concepto: conceptoLimpio,
+                importe: importeNormalizado,
+            });
+            renderGastos();
+            previewInfo.textContent = "Gasto aÃ±adido.";
         }
 
         function formatMoney(value) {
@@ -318,11 +520,12 @@ th { background: #f9fafb; }
                 return;
             }
 
+            rebalanceLineas();
             const lineasValidas = [];
             for (let i = 0; i < lineas.length; i += 1) {
                 const linea = lineas[i];
                 const cache = toDecimalText(linea.cache_neto);
-                if (!cache || parseFloat(cache) <= 0) {
+                if (linea.es_autonomo && (!cache || parseFloat(cache) <= 0)) {
                     previewInfo.textContent = "Hay líneas sin caché válido. Revisa antes de calcular.";
                     return;
                 }
@@ -367,7 +570,7 @@ th { background: #f9fafb; }
                 previewInfo.textContent = "Cálculo actualizado para " + data.items.length + " artistas.";
                 previewBody.innerHTML = data.items.map((item) => (
                     "<tr>" +
-                        "<td>" + item.nombre + "</td>" +
+                        "<td>" + escapeHtml(item.nombre) + "</td>" +
                         "<td>" + formatMoney(item.cache_neto) + "</td>" +
                         "<td>" + item.tramo + "</td>" +
                         "<td>" + parseFloat(item.irpf).toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + "%</td>" +
@@ -397,6 +600,23 @@ th { background: #f9fafb; }
                 lineCacheInput.value = "";
             });
         }
+        if (addExpenseBtn) {
+            addExpenseBtn.addEventListener("click", function () {
+                addGasto(expenseConceptInput.value, expenseAmountInput.value);
+                expenseConceptInput.value = "";
+                expenseAmountInput.value = "";
+            });
+        }
+        suggestedExpenseButtons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                if (expenseConceptInput && !expenseConceptInput.value.trim()) {
+                    expenseConceptInput.value = button.getAttribute("data-concepto") || "";
+                } else {
+                    addGasto(button.getAttribute("data-concepto") || "", expenseAmountInput.value);
+                    expenseAmountInput.value = "";
+                }
+            });
+        });
         if (lineasBody) {
             lineasBody.addEventListener("click", function (event) {
                 const button = event.target.closest(".remove-btn");
@@ -415,6 +635,7 @@ th { background: #f9fafb; }
                 const index = parseInt(element.getAttribute("data-index"), 10);
                 if (!Number.isInteger(index) || !lineas[index]) return;
                 if (field === "cache_neto") {
+                    if (!lineas[index].es_autonomo) return;
                     lineas[index].cache_neto = element.value;
                 } else if (field === "destino_a1") {
                     lineas[index].destino_a1 = element.value;
@@ -429,6 +650,11 @@ th { background: #f9fafb; }
                 const field = checkbox.getAttribute("data-field");
                 if (!field) return;
                 lineas[index][field] = checkbox.checked;
+                if (field === "es_autonomo") {
+                    lineas[index].cache_neto = checkbox.checked ? "" : lineas[index].cache_neto;
+                    renderLineas();
+                    return;
+                }
                 if (field === "solicitud_a1") {
                     if (!checkbox.checked) {
                         lineas[index].destino_a1 = "";
@@ -443,14 +669,53 @@ th { background: #f9fafb; }
                 if (!input) return;
                 const index = parseInt(input.getAttribute("data-index"), 10);
                 if (!Number.isInteger(index) || !lineas[index]) return;
+                if (!lineas[index].es_autonomo) return;
                 const normalized = toDecimalText(input.value);
                 lineas[index].cache_neto = normalized;
                 input.value = normalized;
                 syncLineas();
             }, true);
         }
+        if (gastosBody) {
+            gastosBody.addEventListener("click", function (event) {
+                const button = event.target.closest(".remove-btn");
+                if (!button) return;
+                const index = parseInt(button.getAttribute("data-expense-index"), 10);
+                if (!Number.isInteger(index)) return;
+                gastos.splice(index, 1);
+                renderGastos();
+            });
+            gastosBody.addEventListener("input", function (event) {
+                const input = event.target.closest("[data-expense-index]");
+                if (!input) return;
+                const index = parseInt(input.getAttribute("data-expense-index"), 10);
+                const field = input.getAttribute("data-expense-field");
+                if (!Number.isInteger(index) || !gastos[index] || !field) return;
+                gastos[index][field] = input.value;
+                syncGastos();
+            });
+            gastosBody.addEventListener("blur", function (event) {
+                const input = event.target.closest("[data-expense-field='importe']");
+                if (!input) return;
+                const index = parseInt(input.getAttribute("data-expense-index"), 10);
+                if (!Number.isInteger(index) || !gastos[index]) return;
+                const normalized = toDecimalText(input.value);
+                gastos[index].importe = normalized;
+                input.value = normalized;
+                syncGastos();
+            }, true);
+        }
         if (agrupacionInput) agrupacionInput.addEventListener("change", preselectGroupingArtists);
         if (calcularBtn) calcularBtn.addEventListener("click", calcular);
+        [baseImponibleInput, honorariosInput].forEach(function (input) {
+            if (!input) return;
+            input.addEventListener("input", updateBudgetSummary);
+            input.addEventListener("blur", function () {
+                const normalized = toDecimalText(input.value);
+                input.value = normalized;
+                updateBudgetSummary();
+            });
+        });
 
         try {
             lineas = JSON.parse(lineasInput.value || "[]");
@@ -465,7 +730,19 @@ th { background: #f9fafb; }
         } catch (_error) {
             lineas = [];
         }
+        try {
+            gastos = JSON.parse(gastosInput.value || "[]");
+            if (!Array.isArray(gastos)) gastos = [];
+            gastos = gastos.map((gasto) => ({
+                concepto: String(gasto.concepto || "").trim(),
+                importe: gasto.importe || "",
+            })).filter((gasto) => gasto.concepto);
+        } catch (_error) {
+            gastos = [];
+        }
         renderLineas();
+        renderGastos();
+        updateBudgetSummary();
         if (hasValidPrefilledCaches()) {
             calcular();
         }

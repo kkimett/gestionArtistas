@@ -92,11 +92,29 @@ tbody tr:nth-child(even) td { background: #f6f7f9; }
                 </select>
             </div>
             <div>
-                <label for="status">Estado</label>
-                <select id="status" name="estado">
+                <label for="payment_status">Estado de pago</label>
+                <select id="payment_status" name="estado_pago">
                     <option value="">Todos</option>
                     {% for value, label in payment_status_choices %}
-                        <option value="{{ value }}" {% if filter_values.estado == value %}selected{% endif %}>{{ label }}</option>
+                        <option value="{{ value }}" {% if filter_values.estado_pago == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="seguridad_social_status">Estado Seg. Social</label>
+                <select id="seguridad_social_status" name="estado_seguridad_social">
+                    <option value="">Todos</option>
+                    {% for value, label in seguridad_social_status_choices %}
+                        <option value="{{ value }}" {% if filter_values.estado_seguridad_social == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="facturacion_status">Estado Facturaci&oacute;n</label>
+                <select id="facturacion_status" name="estado_facturacion">
+                    <option value="">Todos</option>
+                    {% for value, label in facturacion_status_choices %}
+                        <option value="{{ value }}" {% if filter_values.estado_facturacion == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
             </div>
