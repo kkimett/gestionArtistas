@@ -1135,7 +1135,7 @@ class GroupingRecordBatchProcessStandbyView(LoginRequiredMixin, View):
         if batch.base_disponible_para_artistas is not None and batch.total_cache_lineas > batch.base_disponible_para_artistas:
             messages.error(
                 request,
-                "No se puede procesar el Stand By porque la suma de los cachÃ©s supera la base disponible.",
+                "No se puede procesar el Stand By porque la suma de los caches supera la base disponible.",
             )
             return redirect("artists:record-grouping-list")
 
